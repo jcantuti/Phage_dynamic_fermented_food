@@ -3,17 +3,16 @@ title: "pH & Acidity distribution"
 author: "Julia Gendre"
 date: "2023-11-09"
 output: html_document
+header-includes:
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
 ---
-
-### Description
-
-XXXXX
 
 ### Packages loading
 
 ```{r directory, message=FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "/work_home/jgendre/2023_Spontaneous_fermentation")
+knitr::opts_chunk$set(echo = TRUE, fig.show = "asis",message = FALSE,warning = FALSE, tidy = FALSE )
+knitr::opts_knit$set(root.dir = "/work_projet/metasimfood/metavirome/Phage_dynamic_fermented_food/")
 ```
 
 ```{r packages, message=FALSE, warning=FALSE}
@@ -27,7 +26,7 @@ sessionInfo()
 ### Data import
 
 ```{r Import data, message=FALSE, warning=FALSE}
-Fermentation_metadata <- read.table("Results_table.csv", sep = ';',dec= ",",header = TRUE)
+Fermentation_metadata <- read.table("/work_projet/metasimfood/metavirome/Phage_dynamic_fermented_food/Results_table.csv", sep = ',',dec= ".",header = TRUE)
 Fermentation_metadata$Day_sampling [Fermentation_metadata$Day_sampling=="22"]<- "21"
 Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T0"]<- "Day 0"
 Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T2"]<- "Day 2"
@@ -36,6 +35,8 @@ Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text
 Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T21"]<- "Day 21"
 Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T22"]<- "Day 21"
 Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T28"]<- "Day 28"
+
+
 
 
 Fermentation_metadata$Day_sampling <- as.numeric(Fermentation_metadata$Day_sampling)
@@ -51,8 +52,8 @@ Fermentation_metadata$Day_sampling_text <- factor(Fermentation_metadata$Day_samp
 mean_pH_df <- Fermentation_metadata %>%
   group_by(Matrix, Day_sampling_text) %>%
   summarise(
-    mean_acidity = mean(pH, na.rm = TRUE),   # Calculer la moyenne du pH
-    sd_acidity = sd(pH, na.rm = TRUE),       # Calculer l'écart-type du pH
+    mean_pH = mean(pH, na.rm = TRUE),   # Calculer la moyenne du pH
+    sd_pH = sd(pH, na.rm = TRUE),       # Calculer l'écart-type du pH
     .groups = 'drop'
   )
 mean_pH_df
@@ -70,7 +71,7 @@ Fermentation_metadata$Matrix <- factor(Fermentation_metadata$Matrix)
 print(levels(Fermentation_metadata$Matrix))
 
 
-pH_graph2 <- ggplot(Fermentation_metadata, aes(x = Day_sampling, y = pH, colour = Matrix)) +
+pH_graph <- ggplot(Fermentation_metadata, aes(x = Day_sampling, y = pH, colour = Matrix)) +
   geom_point() +
   geom_smooth(method = "loess", level = 0.95) +
   scale_x_continuous(breaks = unique(Fermentation_metadata$Day_sampling)) +
@@ -83,7 +84,7 @@ pH_graph2 <- ggplot(Fermentation_metadata, aes(x = Day_sampling, y = pH, colour 
         axis.text = element_text(size=11),
         legend.text = element_text(size=13),
         legend.title = element_text(size=14))
-pH_graph2
+pH_graph
 
 
 ### Statistic
@@ -156,7 +157,6 @@ pH_acid_combin <- ggarrange(pH_graph, Ac_graph,labels = c("A", "B"),
            plot.margin = margin(1, 1, 1, 1, "cm"))
 pH_acid_combin
 
-ggsave("pH_and_acidity_distribution.tiff",pH_acid_combin,width = 10, height = 6, dpi = 300)
 ```
 
 ## Representation of microbial enumeration during fermentation
@@ -230,8 +230,6 @@ Microbio_combin <- ggarrange(B_cabbage, B_carrot,
 Microbio_combin
 
 
-#ggsave("microbio_combined.tiff",Microbio_combin,width = 8, height = 6, dpi = 300)
-
 ```
 
 #### Microbial enumeration statistics
@@ -276,10 +274,7 @@ pH_all <- ggarrange(pH_acid_combin, Microbio_combin, labels = c("", "c"),
   label.x = 0.03)
 pH_all
 
-#ggsave("pH_acidity_microbio.svg",pH_all,width = 15, height = 8, dpi = 300)
 
-#file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_pH_acidity_microbio.svg")
-#ggsave(file_name,plot =pH_all,device = "svg",width = 15, height = 8, dpi = 300)
 ```
 
 ## VLP estimation by Epifluorescence microscopy
