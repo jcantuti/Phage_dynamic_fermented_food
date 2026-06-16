@@ -27,6 +27,33 @@ For run this commande line in all sample, we used ``` sh scripts/kaiju_metag.sh`
 
 Kaiju results were further analyzed in R using the script Metagenome_analyses.Rmd to produced the final data presented in the article.
 
+#### Assembly and MAGs reconstruction
+Raw reads were processed using the SnakeMAGs version 1.1.1 workflow with default parameters, which enabled assembly and reconstruction of medium quality metagenome-assembled genomes (MAGs).
+All samples were processed in parallel (note: temporary files can't be very heavy) using the following procedure:
+
+Create a work directory (i.e:  ```/path/to/working/directory/```)
+Copy in work directory these files:
+a. SnakeMAGs.smk = tool pipeline (this file should not be modified)
+b. config.yaml = configuration file. This file specifies the access paths, input files and parameters for each tools (should be edited by the user).
+c. run_SnakeMAGs.sh = shell script to run the job (should be edited by the user for --configfile /path/to/working/directory/config.yaml)
+
+We used this command line to run the script:
+```sh run_SnakeMAGs.sh```
+MAGs produced from each sample were renamed (to keep trace of their original sample) and merged in a single fasta file using the following procedure:
+```
+for i in results/SnakeMAGs/Sample1/*.fa 
+do
+id=$(echo $(basename $i | sed 's/\.fa//g'))
+echo $id
+awk -v id=$id '/^>/{print ">" "Sample1_" id "_" substr($0, 2); next}{print}' $i > results/SnakeMAGs/Sample1/Sample1_M_${id}.fa
+done
+
+for i in results/SnakeMAGs/Sample*/*.fa;
+do
+more ${i} >> results/SnakeMAGs/All_MAGS.fna;
+done
+```
+
 ## Viral metagenomic analysis
 ### Reads QC
 For each sample, raw reads were quality checked using FastQC version 0.11.9, and the results were saved in results/FastQC_report. Here is the command line:
