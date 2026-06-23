@@ -74,7 +74,7 @@ process_kaiju_data <- function(data, Samples_name) {
   # Add colonne 'Samples' to raw data vith Samples_name variable and select column : percentage of reads belong to taxa, number of reads belongt to taxa, taxon_id et taxon_name.
   data <- data %>%
     mutate(Samples = Samples_name) %>%
-    select(Samples, percent, reads, taxon_id, taxon_name)
+    dplyr::select(Samples, percent, reads, taxon_id, taxon_name)
   
   # split taxon_name column according to different taxonomic rank.
   data <- data %>%
@@ -119,7 +119,7 @@ process_kaiju_data <- function(data, Samples_name) {
 abundance_summary_ki <- function(data, group_column, value_column, new_column_name) {
   # Summary of abundance
   summary_data <- data %>%
-    select({{group_column}}, {{value_column}}) %>%
+    dplyr::select({{group_column}}, {{value_column}}) %>%
     group_by({{group_column}}) %>%
     summarise(total_count = sum({{value_column}}, na.rm = TRUE))
   
@@ -134,7 +134,7 @@ summarize_genus_abundance <- function(data, new_column_name, genus_col = "genus"
   
   # Selecte column
   summary <- data %>%
-    select(!!sym(genus_col), !!sym(reads_col)) %>%
+    dplyr::select(!!sym(genus_col), !!sym(reads_col)) %>%
     
     # Group by 'genus' and sum 'reads'
     group_by_at(genus_col) %>%
@@ -170,7 +170,7 @@ summarize_species_abundance <- function(data, new_column_name, species_col = "sp
   
   # Selecte column
   summary <- data %>%
-    select(!!sym(species_col), !!sym(reads_col)) %>%
+    dplyr::select(!!sym(species_col), !!sym(reads_col)) %>%
     
     # Group by 'species' and sum 'reads'
     group_by_at(species_col) %>%
@@ -357,6 +357,7 @@ per_read_kingdom_cabb
 
 
 ```
+
 ### Viral community at the species level
 ```{r cabbage viruses plot, message=FALSE, warning=FALSE}
 
@@ -448,18 +449,10 @@ abundance_long_viruses <- abundance_kaiju_viruses_4 %>%
   pivot_longer(cols = -species, names_to = "Samples", values_to = "abundance")
 
 
-
-print(abundance_kaiju_viruses_4$species)
-
-	
 abundance_long_viruses$species <- factor(abundance_long_viruses$species, levels = c("Anamdongvirus LBR48","Duamitovirus hulu1","Escherichia phage KW1E_UTAR","Heilongjiangvirus Lb","Lactobacillus phage Silenus","Mitoviridae sp.","Lactobacillus phage LL-K","Salchichonvirus LP65","Xanthomonas phage vB_XooS_NR08","unknown Caudoviricetes","unknown","Other"))
 abundance_long_viruses$Samples <- factor(abundance_long_viruses$Samples, levels = c("SA_0A","SA_0B","SA_0C","SA_2A","SA_2B","SA_2C","SA_7A","SA_7B","SA_7C","SA_14A","SA_14B","SA_14C","SA_21A","SA_21B","SA_21C", "SA_28A", "SA_28B", "SA_28C"))
 
-
-
 abundance_long_viruses_cabb <- left_join(abundance_long_viruses,Fermentation_metadata, by="Samples")
-
-
 
 genus_col_vir <- c("Anamdongvirus LBR48" = '#a6cee3' , "Duamitovirus hulu1"="#1f78b4","Escherichia phage KW1E_UTAR"='#fdbf6f',"Heilongjiangvirus Lb"='#ff7f00',"Lactobacillus phage Silenus"='#5e4fa2',"Mitoviridae sp."='#cab2d6',"Lactobacillus phage LL-K"="#fee08b","Salchichonvirus LP65"="#de77ae","Xanthomonas phage vB_XooS_NR08"="#8e0152","unknown"="#b15928", "unknown Caudoviricetes"="lavenderblush3","Other" ='#d9d9d9')
 
@@ -594,6 +587,9 @@ per_read_genus_bact_cabb
 #file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_bacteria_cabbage.tiff")
 #ggsave(file_name,plot =per_read_genus_bact_cabb,device = "tiff",width = 15, height = 6, dpi = 300)
 ```
+
+Temporal variation of bacterial community. Relative abundance of reads per sample (%) at the genus level.
+
 #### Statistic analyses of the bacterial community variation during cabbage fermentation
 ```{r Cabbage Bray-curtis/permanova, message=FALSE, warning=FALSE}
 abundance_kaiju_bacteria_cabbage_obj <-abundance_kaiju_bacteria_cab%>%
@@ -643,22 +639,6 @@ p1_metag_bact_cabb_BC <- plot_ordination(obj_Cabbage_metag_bact, ord_PCoA_bc,col
   
 p1_metag_bact_cabb_BC
 
-```
-
-#### Combining the graphs for the final figure
-```{r combine cabbage plot, message=FALSE, warning=FALSE}
-
-p_kaiju_cabb <- ggarrange(per_read_kingdom_cabb, per_read_genus_bact_cabb, labels = c("A", "B"),
-          ncol = 2, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")+
-  theme(plot.background = element_rect(fill = "white", color = NA),
-        panel.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1, "cm")) # Ajuster les marges
-p_kaiju_cabb
-
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_combine_Kaiju_cabbage.tiff")
-ggsave(file_name,plot =p_kaiju_cabb,device = "tiff",width = 20, height = 6, dpi = 300)
 ```
 
 #### Statistics of results
@@ -917,6 +897,7 @@ per_read_kingdom_carrot <- ggplot(abundance_long_carrot2, aes(fill=superkingdom,
 per_read_kingdom_carrot
 
 ```
+
 ### Viral community at the species level
 ```{r carrot viruses plot, message=FALSE, warning=FALSE}
 
@@ -1007,26 +988,10 @@ abundance_kaiju_viruses_car4 <- abundance_kaiju_viruses_car3[c("species","CA_0A"
 abundance_long_viruses_car <- abundance_kaiju_viruses_car4 %>%
   pivot_longer(cols = -species, names_to = "Samples", values_to = "abundance")
 
-
-
-print(abundance_kaiju_viruses_car4$species)
-
-	
 abundance_long_viruses_car$species <- factor(abundance_long_viruses_car$species, levels = c("Leuconostoc phage P974","Leuconostoc phage phiLNTR2","Unaquatrovirus uv1A4","Unaquatrovirus LN25","Unaquatrovirus LN34","Unaquatrovirus Ln9","unknown Caudoviricetes","unknown","Other"))
 abundance_long_viruses_car$Samples <- factor(abundance_long_viruses_car$Samples, levels = c("CA_0A","CA_0B","CA_0C","CA_2A","CA_2B","CA_2C","CA_7A","CA_7B","CA_7C","CA_14A","CA_14B","CA_14C","CA_21A","CA_21B","CA_21C", "CA_28A", "CA_28B", "CA_28C"))
 
-
 abundance_long_viruses_carr <- left_join(abundance_long_viruses_car,Fermentation_metadata, by="Samples")
-
-
-
-#b2df8a
-#33a02c
-#fb9a99
-#e31a1c
-#fdbf6f
-#ff7f00
-#cab2d6
 
 genus_col_vir <- c("Leuconostoc phage P974" = '#a6cee3' , "Leuconostoc phage phiLNTR2"="#1f78b4","Unaquatrovirus uv1A4"='#b2df8a',"Unaquatrovirus LN25"='#33a02c',"Unaquatrovirus LN34"='#fb9a99',"Unaquatrovirus Ln9"='#e31a1c',"unknown"="#fdbf6f", "unknown Caudoviricetes"="#ff7f00","Other" ='#cab2d6')
 
@@ -1130,7 +1095,6 @@ abundance_long_bacteria_cabbage2 <- left_join(abundance_long_bacteria_cabbage,Fe
 abundance_long_bacteria_carrot <- abundance_kaiju_bacteria_carrot4 %>%
   pivot_longer(cols = -genus, names_to = "Samples", values_to = "abundance")
 
-print(abundance_kaiju_bacteria_carrot2$genus)
 
 abundance_long_bacteria_carrot$genus <- factor(abundance_long_bacteria_carrot$genus, levels = c("Leuconostoc","Lactiplantibacillus","Levilactobacillus","Weissella","Other"))
 
@@ -1160,6 +1124,9 @@ per_read_genus_bact_carr
 file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_bacteria_carrot.tiff")
 ggsave(file_name,plot =per_read_genus_bact_carr,device = "tiff",width = 15, height = 6, dpi = 300)
 ```
+
+Bar plot of bacterial community. Relative abundance of reads per sample (%) at the genus level.
+
 #### Statistic analyses of the bacterial community variation during carrot fermentation
 ```{r Carrot Bray-curtis/permanova, message=FALSE, warning=FALSE}
 abundance_kaiju_bacteria_carrot_obj <-abundance_kaiju_bacteria_carrot%>%
@@ -1210,57 +1177,16 @@ p1_metag_bact_BC <- plot_ordination(obj_Carrot_metag_bact, ord_PCoA_bc,color = "
 p1_metag_bact_BC
 
 
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_carrot_PCoA_BC_.tiff")
-ggsave(file_name,plot =p1_metag_bact_BC,device = "tiff",width = 10, height = 6, dpi = 300)
+#file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_carrot_PCoA_BC_.tiff")
+#ggsave(file_name,plot =p1_metag_bact_BC,device = "tiff",width = 10, height = 6, dpi = 300)
 
 ```
 
-#### Combining the graphs for the final figure
-```{r combine carrot plot, message=FALSE, warning=FALSE}
-
-p_kaiju_carrot <- ggarrange(per_read_kingdom_carrot, per_read_genus_bact_carr, labels = c("A", "B"),
-          ncol = 2, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")+
-  theme(plot.background = element_rect(fill = "white", color = NA),
-        panel.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1, "cm")) # Ajuster les marges
-p_kaiju_carrot
-
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_combine_Kaiju_carrot.tiff")
-ggsave(file_name,plot =p_kaiju_carrot,device = "tiff",width = 20, height = 6, dpi = 300)
-```
-
-```{r Carrot figure, message=FALSE, warning=FALSE}
-p_kaiju_carrot <- ggarrange(per_read_kingdom_carrot, per_read_genus_vir_carr, labels = c("A", "B"),
-          ncol = 2, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")
-p_kaiju_carrot
-
-p_compo_microb <- ggarrange(per_read_genus_bact_carr,p1_metag_bact_BC, labels = c("C","D"),
-          ncol = 2, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")
-p_compo_microb
-
-p_compo_microb_VF <- ggarrange(p_kaiju_carrot,p_compo_microb,
-          ncol = 1, nrow = 2, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")+
-  theme(plot.background = element_rect(fill = "white", color = NA),
-        panel.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1, "cm")) # Ajuster les marges
-p_compo_microb_VF
-
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_combine_microb_carrot.tiff")
-ggsave(file_name,plot =p_compo_microb_VF,device = "tiff",width = 18, height = 10, dpi = 300)
-
-```
+Structural variations of the bacterial communities of fermented carrot. Principal coordinate analysis (PCoA) was applied to the Bray-Curtis dissimilarity matrix derived from bacterial community profiles. Samples are colored according to the sampling day.
 
 #### Statistics of results
 ```{r Carrot stat, message=FALSE, warning=FALSE}
-abundance_kaiju_carrot
+
 abundance_kaiju_carrot <- abundance_kaiju_carrot %>%
   mutate(Day = case_when(
     grepl("0[A-C]$", Samples) ~ 0,
@@ -1338,8 +1264,6 @@ reads_summary_carr_Archaea <- abundance_kaiju_carrot %>%
   ) %>%
   mutate(proportion_Archaea = Archaea_reads / total_reads_classified)
   
-
-# Affichage du résultat
 print(reads_summary_carr_Archaea)
 
 ```
@@ -1348,8 +1272,7 @@ print(reads_summary_carr_Archaea)
 # Analyses of the MAGs abundance during cabbage and carrot fermentation.
 
 ## Data import Carrot
-
-```{r Import data, message=FALSE, warning=FALSE}
+```{r Import data MAG carrot, message=FALSE, warning=FALSE}
 #Import count matrix of carrot samples
 count_metag_carrot <- read.table("results/SnakeMAGs/MAPPING_BWA-MEM2/Carrot/presence_counts.csv") 
 count_metag_carrot <- count_metag_carrot[-1:-2,] #delete 2 firsts line that don't corresponding to contigs.
@@ -1400,35 +1323,26 @@ df_MAG_abundance_carr <- count_metag_carrot_info %>%
 ### Abundance table for Carrot
 We created a Phyloseq object that contains the abundance table and metadata of all samples.
 ```{r all abundance table, message=FALSE, warning=FALSE}
-# Check consistency 
-identical(rownames(df_MAG_abundance_carr), rownames(info_MAGs_carrot))  # Doit retourner TRUE
-
 df_MAG_abundance_carr <- df_MAG_abundance_carr[order(rownames(df_MAG_abundance_carr)), , drop = FALSE]
 info_MAGs_carrot <- info_MAGs_carrot[order(rownames(info_MAGs_carrot)), , drop = FALSE]
 
-identical(rownames(df_MAG_abundance_carr), rownames(info_MAGs_carrot))  # Devrait être TRUE maintenant
-
-# Vérifier si les noms des échantillons correspondent
-identical(colnames(df_MAG_abundance_carr), rownames(sample_metag_metadata))  # Doit
-
-
 # Check consistency
-all(colnames(df_MAG_abundance_carr) %in% rownames(sample_metag_metadata)) ## sample names between metadata and otu table
-all(rownames(df_MAG_abundance_carr) %in% rownames(info_MAGs_carrot)) ## taxa names between taxonomic and otu tables
+#all(colnames(df_MAG_abundance_carr) %in% rownames(sample_metag_metadata)) ## sample names between metadata and otu table
+#all(rownames(df_MAG_abundance_carr) %in% rownames(info_MAGs_carrot)) ## taxa names between taxonomic and otu tables
 
 otu_tab <- otu_table(as.matrix(df_MAG_abundance_carr), taxa_are_rows = TRUE)
 tax_tab <- tax_table(as.matrix(info_MAGs_carrot))
 
 obj_metag_carrot <- phyloseq(otu_tab, sample_data(sample_metag_metadata), tax_tab)
 
-otu_table(obj_metag_carrot)
-tax_table(obj_metag_carrot)
+#otu_table(obj_metag_carrot)
+#tax_table(obj_metag_carrot)
 
 ```
 #### Normalisation of abundance table for carrot
 We transformed abundance data by TPM. We normalized by contig length and
 transformed to proportions
-```{r TPM transformation, message=FALSE, warning=FALSE}
+```{r TPM transformation carrot, message=FALSE, warning=FALSE}
 # Extract abundance table 
 abundance_table_carrot <- as.data.frame(otu_table(obj_metag_carrot)) %>% rownames_to_column(var = "MAG_ID")
 #recovery the abundance table of obj_clean in the form of dataframe. The row name is the contigs identify.
@@ -1457,7 +1371,7 @@ obj_metag_carrot_TPM <- transform_sample_counts(obj_metag_carrot_TPM, count_to_p
 ```
 
 
-```{r Pheatmap normalized filtred, message=FALSE, warning=FALSE}
+```{r Pheatmap normalized filtred carrot, message=FALSE, warning=FALSE}
 
 #transform log function
 log_fun <- function(x){
@@ -1470,13 +1384,12 @@ sample_annotation_metag_carr <- data.frame(sample_data(obj_metag_carrot_TPM))
 
 #Extract annotation data 
 MAG_annotations <- data.frame(tax_table(obj_metag_carrot_TPM))
-table(MAG_annotations$Species)
 
 # Extract vOTU metadata
 Classification_carr <- MAG_annotations["Species"]
 
 # Creat dataframe `row_ann` for the row annotation
-row_ann_carr <- data.frame(Classification)
+row_ann_carr <- data.frame(Classification_carr)
 col_ann_carr <- sample_annotation_metag_carr["sampling_day"]
 col_ann_carr$sampling_day <- as.character(col_ann_carr$sampling_day)
 col_ann_carr$sampling_day <- factor (col_ann_carr$sampling_day, levels = c("0","2","7","14","21","28"))
@@ -1541,11 +1454,10 @@ metadata_df$SampleID <- rownames(metadata_df)
 tax_df <- as.data.frame(tax_table(obj_metag_carrot_TPM))
 tax_df$MAG_ID <- rownames(tax_df)
 colnames(tax_df) <- trimws(colnames(tax_df))  # Remove extra spaces
-names(tax_df)
 
 # keep only species column
 tax_df <- tax_df %>%
-  select(MAG_ID, Species)
+  dplyr::select(MAG_ID, Species)
 
 otu_long <- otu_table_df %>%
   pivot_longer(cols = -SampleID, names_to = "MAG_ID", values_to = "Abundance") %>%
@@ -1564,8 +1476,6 @@ otu_summary <- otu_long %>%
             sd_abund = sd(Rel_Abundance, na.rm = TRUE), .groups = "drop")
 
 otu_summary$MAG_species <- paste(otu_summary$MAG_ID, " (", otu_summary$Species, ")", sep = "")
-
-table (otu_summary$MAG_species)
 
 species_color_carr_intense <- list("Species" = c(
   "CA_2A_4 (Leuconostoc mesenteroides)" = "#42A5F5",
@@ -1589,9 +1499,14 @@ g_MAGs_carr_species <- ggplot(otu_summary, aes(x = sampling_day, y = mean_abund,
 g_MAGs_carr_species
 
 ```
-## Data import
 
-```{r Import data, message=FALSE, warning=FALSE}
+A) Temporal variation of bacterial metagenome assembled genomes (MAGs) during carrot fermentation. The standardized relative abundance (Z-score) of dereplicated MAGs during the fermentation process is represented through a heatmap. The relative abundance values were centered and scaled (mean = 0, standard deviation = 1) to highlight deviations from the average value across samples. The color gradient ranges from blue (lower-than-average abundance) to red (higher-thanaverage abundance), with white indicating values close to the mean. Rows correspond to individual dereplicated MAGs, while columns represent samples collected at different time points (from day 0 to day 28).
+
+B) Representation of the dynamic of bacterial community during vegetable fermentation. Average relative abundance (%) curve of dereplicated MAGs during carrot fermentation.
+
+## Data import Cabbage
+
+```{r Import data cabbage, message=FALSE, warning=FALSE}
 
 #Import count matrix of all samples
 count_metag_cabbage <- read.table("results/SnakeMAGs/MAPPING_BWA-MEM2/Cabbage/presence_counts.csv") 
@@ -1603,24 +1518,13 @@ samples_sum_reads_cabbage <-colSums(count_metag_cabbage)
 count_metag_cabbage <- count_metag_cabbage%>%
   rownames_to_column(.,var="Contigs")
 
-
 info_contigs_cabbage <- read.table("METADATA/Contig_MAG_info_cabbage.txt",sep="\t",header = TRUE) 
 
 count_metag_cabbage_info <- right_join(count_metag_cabbage,info_contigs_cabbage,by="Contigs")
 
-
-common <- intersect(count_metag_cabbage$Contigs, info_contigs_cabbage$Contigs)
-cat("Contigs dans count_metag :", nrow(count_metag_cabbage), "\n")
-cat("Contigs dans info_contigs :", nrow(info_contigs_cabbage), "\n")
-cat("Contigs en commun :", length(common), "\n")
-
-
 info_MAGs_cabbage0 <- read.table("METADATA/MAG_info_cabbage.txt",sep="\t",header = TRUE)
 info_MAGs_cabbage <- info_MAGs_cabbage0%>%
   column_to_rownames(.,var="MAG_ID")
-
-
-
 
 # Supposons que df_abundance contient les abondances des contigs par échantillon
 df_MAG_abundance_cabb <- count_metag_cabbage_info %>%
@@ -1651,31 +1555,21 @@ df_MAG_abundance_cabb <- count_metag_cabbage_info %>%
 
 ### Abundance table for Cabbage
 We created a Phyloseq object that contains the abundance table and metadata of all samples.
-```{r all abundance table, message=FALSE, warning=FALSE}
-
-# Check thaht MAG name correspond between to files
-identical(rownames(df_MAG_abundance_cabb), rownames(info_MAGs_cabbage))  # Must be : TRUE
-
+```{r cabbage abundance table, message=FALSE, warning=FALSE}
 df_MAG_abundance_cabb <- df_MAG_abundance_cabb[order(rownames(df_MAG_abundance_cabb)), , drop = FALSE]
 info_MAGs_cabbage <- info_MAGs_cabbage[order(rownames(info_MAGs_cabbage)), , drop = FALSE]
 
-identical(rownames(df_MAG_abundance_cabb), rownames(info_MAGs_cabbage))  
-
-# Vérifier si les noms des échantillons correspondent
-identical(colnames(df_MAG_abundance_cabb), rownames(sample_metag_metadata))  
-
-
 # Check consistency
-all(colnames(df_MAG_abundance_cabb) %in% rownames(sample_metag_metadata)) ## sample names between metadata and otu table
-all(rownames(df_MAG_abundance_cabb) %in% rownames(info_MAGs_cabbage)) ## taxa names between taxonomic and otu tables
+#all(colnames(df_MAG_abundance_cabb) %in% rownames(sample_metag_metadata)) ## sample names between metadata and otu table
+#all(rownames(df_MAG_abundance_cabb) %in% rownames(info_MAGs_cabbage)) ## taxa names between taxonomic and otu tables
 
 otu_tab_cabbage <- otu_table(as.matrix(df_MAG_abundance_cabb), taxa_are_rows = TRUE)
 tax_tab_cabbage <- tax_table(as.matrix(info_MAGs_cabbage))
 
 obj_metag_cabbage <- phyloseq(otu_tab_cabbage, sample_data(sample_metag_metadata), tax_tab_cabbage)
 
-otu_table(obj_metag_cabbage)
-tax_table(obj_metag_cabbage)
+#otu_table(obj_metag_cabbage)
+#tax_table(obj_metag_cabbage)
 
 ```
 
@@ -1685,7 +1579,7 @@ tax_table(obj_metag_cabbage)
 We transformed abundance data by TPM. We normalized by contig length and
 transformed to proportions
 
-```{r TPM transformation, message=FALSE, warning=FALSE}
+```{r TPM transformation cabbage, message=FALSE, warning=FALSE}
 # Extract abundance table 
 abundance_table_cabb <- as.data.frame(otu_table(obj_metag_cabbage)) %>% rownames_to_column(var = "MAG_ID")
 #recovery the abundance table of obj_clean in the form of dataframe. The row name is the contigs identify.
@@ -1714,7 +1608,7 @@ abundance_cabb_TPM <- otu_table(obj_metag_cabbage_TPM)
 ```
 
 
-```{r Pheatmap normalized filtred, message=FALSE, warning=FALSE}
+```{r Pheatmap normalized filtred cabbage, message=FALSE, warning=FALSE}
 
 #transform log function
 log_fun <- function(x){
@@ -1727,7 +1621,6 @@ sample_annotation_cabb <- data.frame(sample_data(obj_metag_cabbage_TPM))
 
 #Extract annotation data 
 MAG_annotations_cabb <- data.frame(tax_table(obj_metag_cabbage_TPM))
-table(MAG_annotations_cabb$Species)
 
 # Extract vOTU metadata
 Classification_cabb <- MAG_annotations_cabb["Species"]
@@ -1764,20 +1657,6 @@ ann_color_cabb = list("Sampling day"=c("0"="#1C3333FF" ,
                                'Lactiplantibacillus paraplantarum' = '#cab2d6',
                                 'Weissella soli' = '#ffff99'))
 
-ph_MAGs_cabb <- pheatmap(MAGs_cabbage_abundance,
-               show_rownames = TRUE,
-               cluster_cols = FALSE,
-               annotation_row = row_ann_cabb,
-               annotation_col = col_ann_cabb,
-               annotation_colors = ann_color_cabb,
-               fontsize_col = 7,
-               fontsize = 6,
-               angle_col = 45,
-               labels_col = custom_colnames_MAGS_cabb)
-               #legend_breaks = c(-5, -3, -1, max(MAGs_carrot_abundance_norm)),
-               #legend_labels = c("-5", "-3", "-1", "log10"))
-
-ph_MAGs_cabb
 
 t.MAGs_cabbage_abundance.scale <- scale(t(MAGs_cabbage_abundance)) 
 MAGs_cabbage_abundance.scale <- t(t.MAGs_cabbage_abundance.scale) 
@@ -1815,7 +1694,7 @@ tax_df <- as.data.frame(tax_table(obj_metag_cabbage_TPM))
 tax_df$MAG_ID <- rownames(tax_df)
 
 tax_df <- tax_df %>%
-  select(MAG_ID, Species)
+  dplyr::select(MAG_ID, Species)
 
 otu_long <- otu_table_df %>%
   pivot_longer(cols = -SampleID, names_to = "MAG_ID", values_to = "Abundance") %>%
@@ -1832,9 +1711,6 @@ otu_summary <- otu_long %>%
             sd_abund = sd(Rel_Abundance, na.rm = TRUE), .groups = "drop")
 
 otu_summary$MAG_species <- paste(otu_summary$MAG_ID, " (", otu_summary$Species, ")", sep = "")
-
-table (otu_summary$MAG_species)
-
 
 species_color_cabb_intense <- list("Species" = c(
   "SA_2C_6 (Leuconostoc mesenteroides)" = "#42A5F5",  
@@ -1861,15 +1737,18 @@ g_MAGs_cabb_species <- ggplot(otu_summary, aes(x = sampling_day, y = mean_abund,
   scale_x_continuous(breaks = unique(otu_summary$sampling_day)) +
   theme(legend.position = "right")
 g_MAGs_cabb_species
-
-
 ```
 
+A) Temporal variation of bacterial metagenome-assembled genomes (MAGs) during cabbage fermentation. The standardized relative abundance (Z-score) of dereplicated MAGs during the fermentation process is represented through a heatmap. The relative abundance values were centered and scaled (mean = 0, standard deviation = 1) to highlight deviations from the average value across samples. The color gradient ranges from blue (lower-than-average abundance) to red (higher-thanaverage abundance), with white indicating values close to the mean. Rows correspond to individual dereplicated MAGs, while columns represent samples collected at different time points (from day 0 to day 28).
+B) Representation of the dynamic of bacterial community during vegetable fermentation. Average relative abundance (%) curve of dereplicated MAGs during cabbage fermentation.
 
 ## Correlation virome bacteriome
 You need to run the Metavirome_analyse.Rmd script to do this part.
 ```{r Mantel correlation, message=FALSE, warning=FALSE}
 # give the same sample names to both virome and bacteriome datasets
+obj_cabbage_TPM <- readRDS("/work_projet/metasimfood/metavirome/Phage_dynamic_fermented_food/results/Phyloseq/obj_cabbage_TPM.rds")
+obj_cabbage_TPM
+
 sample_names(obj_metag_cabbage_TPM) <- sample_names(obj_cabbage_TPM)
 # PCoA phage
 sample_sums(obj_cabbage_TPM)
@@ -1886,4 +1765,66 @@ mantel(dist_bc_phage, dist_bc_bact, method="pearson", permutations = 999)
 
 ```
 
+## 
+```{r}
+abundance_cab_bact_genus_mean <- abundance_kaiju_bacteria_cab %>%
+  dplyr::mutate(
+    mean_abundance_cab = rowMeans(dplyr::select(., dplyr::where(is.numeric)) %>% as.data.frame())
+  )
 
+
+abundance_cab_bact_genus_mean <- abundance_cab_bact_genus_mean[,c("genus","mean_abundance_cab")]
+
+#abundance_kaiju_bacteria_carrot
+
+abundance_car_bact_genus_mean <- abundance_kaiju_bacteria_carrot %>%
+  dplyr::mutate(
+    mean_abundance_car = rowMeans(dplyr::select(., dplyr::where(is.numeric)) %>% as.data.frame())
+  )
+
+abundance_car_bact_genus_mean <- abundance_car_bact_genus_mean[,c("genus","mean_abundance_car")]
+
+abundance_kaiju_bacteria_genus <- full_join(abundance_cab_bact_genus_mean,abundance_car_bact_genus_mean)
+abundance_kaiju_bacteria_genus [is.na(abundance_kaiju_bacteria_genus)] <- 0
+
+abundance_kaiju_bacteria_genus_2 <- column_to_rownames(abundance_kaiju_bacteria_genus,"genus")%>%
+  mutate(sum=rowSums(.)) %>%
+  arrange(-sum) %>%
+  rownames_to_column(var ="genus")
+
+abundance_kaiju_bacteria_genus_3 <- mutate(abundance_kaiju_bacteria_genus_2,genus = ifelse(sum < 0.4, "Other", genus)) %>%
+  group_by(genus)
+
+abundance_kaiju_bacteria_genus_3 <- abundance_kaiju_bacteria_genus_3[,c("genus","mean_abundance_cab","mean_abundance_car")]
+
+colnames(abundance_kaiju_bacteria_genus_3) <- c("genus","Cabbage","Carrot")
+
+abundance_long_bacteria_genus <- abundance_kaiju_bacteria_genus_3 %>%
+  pivot_longer(cols = -genus, names_to = "Samples", values_to = "abundance")
+
+abundance_long_bacteria_genus2 <- abundance_long_bacteria_genus %>%
+  group_by(genus, Samples)%>%
+  summarise(Abondance_totale = sum(abundance, na.rm = TRUE))
+
+abundance_long_bacteria_genus2$genus <- factor(abundance_long_bacteria_genus2$genus, levels = c("Leuconostoc","Secundilactobacillus","Lactiplantibacillus","Levilactobacillus","Lactobacillus","Pantoea","Pediococcus","Rahnella","Weissella","Enterobacter","Other"))
+
+genus_col <- c("Leuconostoc" = '#8dd3c7' ,"Secundilactobacillus"= "#ffffb3" ,"Lactiplantibacillus" = '#bebada',"Levilactobacillus" = '#fb8072',"Lactobacillus"= '#80b1d3',"Pantoea"= '#fdb462',"Pediococcus"=  '#b3de69',"Rahnella"='#fccde5' ,"Weissella" ='#ccebc5',"Enterobacter" ='#bc80bd',"Other" ='#d9d9d9')
+
+
+per_bacteria_genus <- ggplot(abundance_long_bacteria_genus2,aes(fill=genus, y=Abondance_totale, x=Samples)) + 
+  geom_bar(stat="identity", position="stack") +
+  labs(x="",y="Relative abundance (%)"
+  )+
+  labs(fill = "Genus")+
+  scale_fill_manual(values = genus_col)+
+  theme(legend.text = element_text(size = 12,face = 'italic'),  # Taille du texte de la légende
+    legend.title = element_text(size = 14),# Taille du titre de la légende
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    panel.background = element_rect(fill = "white"),
+    axis.ticks = element_blank(),
+    strip.text = element_text(size = 14))
+per_bacteria_genus
+```
+Barplot of bacterial communities of lab fermented cabbage and carrot. Relative abundance of reads per matrix (%) at the genus level. 
