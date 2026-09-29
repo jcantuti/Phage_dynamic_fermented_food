@@ -5,17 +5,18 @@ This workflow details the bioinformatics and statistical analysis presented in t
 ## Input files and directory
 
 Raw sequencing data for fermented vegetables metagenomes and viromes were deposited at the Sequence Read Archive (SRA) of the NCBI as part of BioProject PRJNA1165654.
-Directory containing the raw sequence data in fastq format: RAW_DATA/virome/ and RAW_DATA/metagenome/
+
+Directory containing the raw sequence data in fastq format, previously download from NCBI (BioProject PRJNA1165654): RAW_DATA/virome/ and RAW_DATA/metagenome/
 Directory containing the reference genomes used for host decontamination in fna format: RAW_DATA/Reference_genome/
 Directory containing all scripts: scripts/
 Directory containing all results: results/
 
 ## Experimental results analysis
-Experimental results were analysis using pH_and_acidity_distribution.Rmd on R studio. The results were saved in results/graph (figures).
+Experimental results were analysis using R studio of 2023_Spontaneous_fermentation.Rproj R project. Figures were saved in results/graph.
 
 ## Shotgun metagenomic analysis
 ### Taxonomy assignment of reads using Kaiju v.1.9.2
-We did a taxonomy assignment of raw reads using Kaiju version 1.9.2 with the non-redundant prokaryotic and eukaryotic database. Here is an example of the command line for one sample:
+We did a taxonomy assignment of raw reads using Kaiju version 1.9.2 with the non-redundant prokaryotic and eukaryotic 2023-05 database. Here is an example of the command line for one sample:
 
 ```
 conda activate kaiju-1.9.2
