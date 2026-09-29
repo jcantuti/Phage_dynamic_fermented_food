@@ -7,8 +7,11 @@ This workflow details the bioinformatics and statistical analysis presented in t
 Raw sequencing data for fermented vegetables metagenomes and viromes were deposited at the Sequence Read Archive (SRA) of the NCBI as part of BioProject PRJNA1165654.
 
 Directory containing the raw sequence data in fastq format, previously download from NCBI (BioProject PRJNA1165654): RAW_DATA/virome/ and RAW_DATA/metagenome/
+
 Directory containing the reference genomes used for host decontamination in fna format: RAW_DATA/Reference_genome/
+
 Directory containing all scripts: scripts/
+
 Directory containing all results: results/
 
 ## Experimental results analysis
