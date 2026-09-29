@@ -8,7 +8,7 @@ Raw sequencing data for fermented vegetables metagenomes and viromes were deposi
 
 Directory containing the raw sequence data in fastq format, previously download from NCBI (BioProject PRJNA1165654): RAW_DATA/virome/ and RAW_DATA/metagenome/
 
-Directory containing the reference genomes used for host decontamination in fna format: RAW_DATA/Reference_genome/
+Directory containing the reference genomes used for host decontamination in fna format previously download from NCBI (accession number: GCF_000695525.1, GCA_001625215.1): RAW_DATA/Reference_genome/
 
 Directory containing all scripts: scripts/
 
