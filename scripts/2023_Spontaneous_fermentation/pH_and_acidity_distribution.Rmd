@@ -191,7 +191,7 @@ B_cabbage <- ggplot(metadata_long_cabbage, aes(x = Day_sampling, y = Enumeration
   geom_errorbar(stat = "summary", fun.data = function(x) {
     data.frame(ymin = mean(x) - sd(x), ymax = mean(x) + sd(x))
  }, width = 0.1, aes(color = "fixed")) +  
-  scale_x_continuous(breaks = unique(metadata_long_carrot$Day_sampling)) +
+  scale_x_continuous(breaks = unique(metadata_long_cabbage$Day_sampling)) +
   scale_color_manual(values = "darkolivegreen4", guide = "none") +  
   scale_fill_manual(values = "darkolivegreen4", guide = "none") +  # Remplissage orange
   scale_shape_manual(values = c(21, 22, 24)) +  # Formes qui acceptent `fill`
