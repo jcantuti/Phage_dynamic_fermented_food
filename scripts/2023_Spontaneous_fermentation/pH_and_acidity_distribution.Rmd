@@ -13,7 +13,7 @@ XXXXX
 
 ```{r directory, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "/work_home/jgendre/2023_Spontaneous_fermentation")
+knitr::opts_knit$set(root.dir = "~/Documents/Redaction/Phage_dynamic_fermented_food")
 ```
 
 ```{r packages, message=FALSE, warning=FALSE}
@@ -21,13 +21,19 @@ library(tidyverse)
 library(ggplot2)
 library(cowplot)
 library(ggpubr)
+library(rstatix)
+library(gridExtra)
+options(bitmapType = "cairo")
 sessionInfo()
 ```
 
 ### Data import
-
 ```{r Import data, message=FALSE, warning=FALSE}
-Fermentation_metadata <- read.table("Results_table.csv", sep = ';',dec= ",",header = TRUE)
+setwd("~/Documents/Redaction/Phage_dynamic_fermented_food")
+
+Fermentation_metadata <- read.csv("results/pH_acidity_microbial_results.txt", sep = "\t",dec= ",",header = TRUE,
+                                    fileEncoding = "latin1")
+
 Fermentation_metadata$Day_sampling [Fermentation_metadata$Day_sampling=="22"]<- "21"
 Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T0"]<- "Day 0"
 Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T2"]<- "Day 2"
@@ -79,10 +85,10 @@ pH_graph2 <- ggplot(Fermentation_metadata, aes(x = Day_sampling, y = pH, colour 
        colour = "Matrix") +
   scale_colour_manual(values = c("Cabbage" = "darkolivegreen4", "Carrot" = "darkorange")) + # Couleurs personnalisées
   theme_minimal()+
-  theme(axis.title = element_text(size=12),
-        axis.text = element_text(size=11),
-        legend.text = element_text(size=13),
-        legend.title = element_text(size=14))
+  theme(axis.title = element_text(size=16),
+        axis.text = element_text(size=15),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size = 18))
 pH_graph2
 
 
@@ -125,10 +131,10 @@ Ac_graph <- ggplot(Fermentation_metadata, aes(x = Day_sampling, y = Acidity, col
        colour = "Matrix") +
   scale_colour_manual(values = c("Cabbage" = "darkolivegreen4", "Carrot" = "darkorange")) + # Couleurs personnalisées
   theme_minimal()+
-  theme(axis.title = element_text(size=12),
-        axis.text = element_text(size=11),
-        legend.text = element_text(size=13),
-        legend.title = element_text(size=14))
+  theme(axis.title = element_text(size=16),
+        axis.text = element_text(size=15),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size = 18))
 Ac_graph
 
 ### Statistic
@@ -148,7 +154,7 @@ mean_Ac_cabbage <- Fermentation_metadata %>%
 
 ```{r acidity & pH distribution, message=FALSE, warning=FALSE}
 
-pH_acid_combin <- ggarrange(pH_graph, Ac_graph,labels = c("A", "B"),
+pH_acid_combin <- ggarrange(pH_graph2, Ac_graph,labels = c("A", "B"),
   common.legend = TRUE,
   legend = "right",
   label.y = 1.00)+
@@ -163,7 +169,6 @@ ggsave("pH_and_acidity_distribution.tiff",pH_acid_combin,width = 10, height = 6,
 
 ```{r Microbial enumeration, message=FALSE, warning=FALSE}
 
-pal_col <- c("MRS"="palevioletred3", "PCA"="royalblue4", "YEGC"= "turquoise3")
 metadata_log <-  Fermentation_metadata
 metadata_log$MRS_enumeration <- as.numeric(Fermentation_metadata$MRS_enumeration)
 metadata_log$MRS <- log10(metadata_log$MRS_enumeration)
@@ -178,22 +183,26 @@ metadata_long_cabbage <- pivot_longer(metadata_log_cabbage,
                               names_to = "Enumeration_Type", 
                               values_to = "Enumeration_Log")
 
-B_cabbage <- ggplot(metadata_long_cabbage, aes(x = Day_sampling, y = Enumeration_Log, color = Enumeration_Type)) +
-  geom_jitter(width = 0.2) +
-  geom_line(aes(group = interaction(Matrix, Enumeration_Type)), stat = "summary", fun = mean) +
+
+B_cabbage <- ggplot(metadata_long_cabbage, aes(x = Day_sampling, y = Enumeration_Log, shape = Enumeration_Type)) +
+  geom_jitter(aes(fill = "fixed"), width = 0.2, size = 3, color = "black", stroke = 1) +  # Contour noir + remplissage coloré
+  geom_line(aes(group = interaction(Matrix, Enumeration_Type), color = "fixed"), 
+            stat = "summary", fun = mean) + 
   geom_errorbar(stat = "summary", fun.data = function(x) {
     data.frame(ymin = mean(x) - sd(x), ymax = mean(x) + sd(x))
-  }, width = 0.1) +
-  scale_x_continuous(breaks = unique(metadata_log_cabbage$Day_sampling)) +
-  labs(x = "Time (day)", y = "Log (CFU/g)", color = "") +
-  theme_minimal()+
-  theme(axis.title = element_text(size=12),
-        axis.text = element_text(size=11),
-        legend.text = element_text(size=13),
-        axis)+
-  scale_colour_manual(values = pal_col)
+ }, width = 0.1, aes(color = "fixed")) +  
+  scale_x_continuous(breaks = unique(metadata_long_carrot$Day_sampling)) +
+  scale_color_manual(values = "darkolivegreen4", guide = "none") +  
+  scale_fill_manual(values = "darkolivegreen4", guide = "none") +  # Remplissage orange
+  scale_shape_manual(values = c(21, 22, 24)) +  # Formes qui acceptent `fill`
+  labs(x = "Time (day)", y = "Log (CFU/g)") +
+  theme_minimal() +
+  theme(axis.title = element_text(size=16),
+        axis.text = element_text(size=15),
+        legend.text = element_text(size=16),
+        legend.title = element_blank())
+B_cabbage
 
-print(B_cabbage)
 
 metadata_log_carrot <- subset(metadata_log, subset=metadata_log$Matrix == 'Carrot')
 metadata_long_carrot <- pivot_longer(metadata_log_carrot, 
@@ -201,21 +210,27 @@ metadata_long_carrot <- pivot_longer(metadata_log_carrot,
                               names_to = "Enumeration_Type", 
                               values_to = "Enumeration_Log")
 
-B_carrot <- ggplot(metadata_long_carrot, aes(x = Day_sampling, y = Enumeration_Log, color = Enumeration_Type)) +
-  geom_jitter(width = 0.2) +
-  geom_line(aes(group = interaction(Matrix, Enumeration_Type)), stat = "summary", fun = mean) +
+B_carrot <- ggplot(metadata_long_carrot, aes(x = Day_sampling, y = Enumeration_Log, shape = Enumeration_Type)) +
+  geom_jitter(aes(fill = "fixed"), width = 0.2, size = 3, color = "black", stroke = 1) +  # Contour noir + remplissage coloré
+  geom_line(aes(group = interaction(Matrix, Enumeration_Type), color = "fixed"), 
+            stat = "summary", fun = mean) + 
   geom_errorbar(stat = "summary", fun.data = function(x) {
     data.frame(ymin = mean(x) - sd(x), ymax = mean(x) + sd(x))
-  }, width = 0.1) +
-  scale_x_continuous(breaks = unique(metadata_log_cabbage$Day_sampling)) +
-  labs(x = "Time (day)", y = "Log (CFU/g)", color = "") +
-  theme_minimal()+
-  theme(axis.title = element_text(size=12),
-        axis.text = element_text(size=11),
-        legend.text = element_text(size=13))+
-  scale_colour_manual(values = pal_col)
+  }, width = 0.1, aes(color = "fixed")) +  
+  scale_x_continuous(breaks = unique(metadata_long_carrot$Day_sampling)) +
+  scale_color_manual(values = "darkorange", guide = "none") +  
+  scale_fill_manual(values = "darkorange", guide = "none") +  # Remplissage orange
+  scale_shape_manual(values = c(21, 22, 24)) +  # Formes qui acceptent `fill`
+  labs(x = "Time (day)", y = "Log (CFU/g)") +
+  theme_minimal() +
+  theme(axis.title = element_text(size=16),
+        axis.text = element_text(size=15),
+        legend.text = element_text(size=16),
+        legend.title = element_blank())
 
-print(B_carrot)
+B_carrot
+
+
 
 
 Microbio_combin <- ggarrange(B_cabbage, B_carrot, 
@@ -223,11 +238,12 @@ Microbio_combin <- ggarrange(B_cabbage, B_carrot,
                             common.legend = TRUE,
                             legend = "right",
                             ncol = 2,
-                            label.y = 1.10) +  # Ajuste la position verticale des labels
+                            label.y = 1) +  # Ajuste la position verticale des labels
   theme(plot.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1, "cm"))
+           plot.margin = margin(1.2, 1.2, 1.2, 1.2, "cm"))
 
 Microbio_combin
+
 
 
 #ggsave("microbio_combined.tiff",Microbio_combin,width = 8, height = 6, dpi = 300)
@@ -266,30 +282,24 @@ mean_MRS_cabbage <- metadata_log_cabbage %>%
 mean_MRS_carrot
 ```
 
-##### Combining the graphs for the final figure
-
-```{r arrangement pH, acidité, microbio, message=FALSE, warning=FALSE}
-
-pH_all <- ggarrange(pH_acid_combin, Microbio_combin, labels = c("", "c"),
-  common.legend = TRUE,
-  nrow = 2,
-  label.x = 0.03)
-pH_all
-
-#ggsave("pH_acidity_microbio.svg",pH_all,width = 15, height = 8, dpi = 300)
-
-#file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_pH_acidity_microbio.svg")
-#ggsave(file_name,plot =pH_all,device = "svg",width = 15, height = 8, dpi = 300)
-```
 
 ## VLP estimation by Epifluorescence microscopy
 
 ```{r}
-mean_VLP_df <- Fermentation_metadata %>%
+metadata_log$VLP_estimation <- as.numeric(Fermentation_metadata$VLP_estimation)
+metadata_log$VLP <- log10(metadata_log$VLP_estimation)
+
+# Convertir Matrix en facteur si ce n'est pas déjà le cas
+Fermentation_metadata$Matrix <- factor(Fermentation_metadata$Matrix)
+
+# Vérification des niveaux
+print(levels(Fermentation_metadata$Matrix))
+
+mean_VLP_df <- metadata_log %>%
   group_by(Matrix, Day_sampling_text) %>%
   summarise(
-    mean_VLP = mean(VLP_estimation, na.rm = TRUE),   # Calculer la moyenne du pH
-    sd_VLP = sd(VLP_estimation, na.rm = TRUE),       # Calculer l'écart-type du pH
+    mean_VLP = mean(VLP, na.rm = TRUE),   # Calculer la moyenne du pH
+    sd_VLP = sd(VLP, na.rm = TRUE),       # Calculer l'écart-type du pH
     .groups = 'drop'
   )
 mean_VLP_df
@@ -300,15 +310,6 @@ mean_VLP_df
 ```{r VLP distribution, message=FALSE, warning=FALSE}
 color_matrix <- c('Cabbage'='darkolivegreen4','Carrot'='darkorange')
 
-metadata_log$VLP_estimation <- as.numeric(Fermentation_metadata$VLP_estimation)
-metadata_log$VLP <- log10(metadata_log$VLP_estimation)
-
-# Convertir Matrix en facteur si ce n'est pas déjà le cas
-Fermentation_metadata$Matrix <- factor(Fermentation_metadata$Matrix)
-
-# Vérification des niveaux
-print(levels(Fermentation_metadata$Matrix))
-
 # Création du graphique
 VLP_graph <- ggplot(metadata_log, aes(x = Day_sampling, y = VLP, colour = Matrix)) +
   geom_point() +
@@ -318,12 +319,32 @@ VLP_graph <- ggplot(metadata_log, aes(x = Day_sampling, y = VLP, colour = Matrix
        y = "VLP estimation log(VLP/g)",
        colour = "Matrix") +
   scale_colour_manual(values = c("Cabbage" = "darkolivegreen4", "Carrot" = "darkorange")) + # Couleurs personnalisées
-  theme(plot.background = element_rect(fill = "white", color = "white"),
-           plot.margin = margin(1, 1, 1, 1, "cm"))+
-  theme_minimal()
+  theme_minimal()+
+  theme(plot.margin = margin(2, 2, 2, 2, "cm"),
+        axis.title = element_text(size=16),
+        axis.text = element_text(size=15),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size = 18),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA))
+  
 VLP_graph
-# Par défaut, geom_smooth utilise une méthode de lissage appelée LOESS (local polynomial regression fitting) pour les petits ensembles de données ou une méthode de régression linéaire pour les plus grands ensembles de données.
 
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_VLP.tiff")
-ggsave(file_name,plot =VLP_graph,device = "tiff",width = 8, height = 5, dpi = 300)
 ```
+##### Combining the graphs for the final figure
+
+```{r arrangement pH, acidité, microbio, message=FALSE, warning=FALSE}
+
+pH_all2.2 <- ggarrange(pH_acid_combin, Microbio_combin,VLP_graph, labels = c("", "C","D"),
+  common.legend = FALSE,
+  nrow = 3,
+  label.x = 0.03)
+pH_all2.2
+
+setwd("~/Documents/Redaction/Phage_dynamic_fermented_food")
+
+file_name <- paste0("results/graph/", Sys.Date(), "_Figure_2.svg")
+ggsave(file_name, plot = pH_all2.2, device = "svg", width = 15, height = 15, create.dir = TRUE)
+
+```
+

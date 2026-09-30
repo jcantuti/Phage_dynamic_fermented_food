@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/Documents/Redaction/Phage_dynamic_fermented_food")
 ```
 
 
@@ -34,7 +35,7 @@ library(ggbreak)
 library(VennDiagram)
 library(grid)
 library(factoextra)
-library(pairwiseAdonis)
+#library(pairwiseAdonis)
 library(Hmisc)
 library(dplyr)
 sessionInfo()
@@ -179,9 +180,31 @@ summarize_species_abundance <- function(data, new_column_name, species_col = "sp
 ```
 
 ## Analyses of the cabbage fermentation
+## Import fermentation metadata
+```{r Import data sauerkraut, message=FALSE, warning=FALSE}
+
+Fermentation_metadata <- read.csv("results/pH_acidity_microbial_results.txt", sep = "\t",dec= ",",header = TRUE,
+                                    fileEncoding = "latin1")
+
+Fermentation_metadata$Day_sampling [Fermentation_metadata$Day_sampling=="22"]<- "21"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T0"]<- "Day 0"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T2"]<- "Day 2"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T7"]<- "Day 7"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T14"]<- "Day 14"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T21"]<- "Day 21"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T22"]<- "Day 21"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T28"]<- "Day 28"
+
+
+Fermentation_metadata$Day_sampling <- as.numeric(Fermentation_metadata$Day_sampling)
+
+Fermentation_metadata$Day_sampling_text <- factor(Fermentation_metadata$Day_sampling_text, levels = c("Day 0", "Day 2", "Day 7","Day 14","Day 21","Day 28"))
+
+```
+
 ### Import kaiju results from cabbage fermentation
 ```{r Import data sauerkraut, message=FALSE, warning=FALSE}
-setwd("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/")
+setwd("~/Documents/Redaction/Phage_dynamic_fermented_food")
 
 SA_0A_Kaiju <- read.delim("results/Kaiju_metag/kaiju_NG-A2640_SA_0A_libLAH8279_summary_viruses.tsv",sep="\t",header = TRUE)
 SA_0B_Kaiju <- read.delim("results/Kaiju_metag/kaiju_NG-A2640_SA_0B_libLAH8280_summary_viruses.tsv",sep="\t",header = TRUE)
@@ -265,6 +288,7 @@ abundance_kaiju_cabbage <- full_join (SA_0A_Kaiju_process,SA_0B_Kaiju_process)%>
   full_join(.,SA_28C_Kaiju_process)
 
 ```
+
 ### Microbial community at the domain level
 Relative abundance for reads for each kingdom were calculated and represented by bar plot.  
 ```{r sauerkraut kingdom plot, message=FALSE, warning=FALSE}
@@ -315,8 +339,7 @@ abundance_long_cabb$Samples <- factor(abundance_long_cabb$Samples, levels = c("S
 abundance_long_cabb$superkingdom <- factor(abundance_long_cabb$superkingdom , levels = c("Archaea","Bacteria","Eukaryota","Viruses","unclassified"))
 kingdom_col <- c("Archaea"='#d7191c',"Bacteria"='#fdae61',"Eukaryota"='#ffffbf',"unclassified"='#abd9e9', "Viruses"='#2c7bb6' )
 
-abundance_long_superkingdom_cabbage2 <- left_join(abundance_long_cabb,Fermentation_metadata, by="Samples")
-
+abundance_long_superkingdom_cabbage2 <- left_join(abundance_long_cabb,Fermentation_metadata, by = c("Samples" = "Samples_id"))
 
 per_read_kingdom_cabb <- ggplot(abundance_long_superkingdom_cabbage2, aes(fill=superkingdom, y=abundance, x=Samples)) +
   geom_bar(stat="identity", position="stack") +
@@ -335,6 +358,7 @@ per_read_kingdom_cabb
 
 
 ```
+
 ### Viral community at the species level
 ```{r cabbage viruses plot, message=FALSE, warning=FALSE}
 
@@ -435,7 +459,7 @@ abundance_long_viruses$Samples <- factor(abundance_long_viruses$Samples, levels 
 
 
 
-abundance_long_viruses_cabb <- left_join(abundance_long_viruses,Fermentation_metadata, by="Samples")
+abundance_long_viruses_cabb <- left_join(abundance_long_viruses,Fermentation_metadata, by = c("Samples" = "Samples_id"))
 
 
 
@@ -547,7 +571,7 @@ abundance_long_bacteria_cabbage$genus <- factor(abundance_long_bacteria_cabbage$
 abundance_long_bacteria_cabbage$Samples <- factor(abundance_long_bacteria_cabbage$Samples, levels = c("SA_0A","SA_0B","SA_0C","SA_2A","SA_2B","SA_2C","SA_7A","SA_7B","SA_7C","SA_14A","SA_14B","SA_14C","SA_21A","SA_21B","SA_21C", "SA_28A", "SA_28B", "SA_28C"))
 
 
-abundance_long_bacteria_cabbage2 <- left_join(abundance_long_bacteria_cabbage,Fermentation_metadata, by="Samples")
+abundance_long_bacteria_cabbage2 <- left_join(abundance_long_bacteria_cabbage,Fermentation_metadata, by = c("Samples" = "Samples_id"))
 
 
 
@@ -572,14 +596,15 @@ per_read_genus_bact_cabb
 #file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_bacteria_cabbage.tiff")
 #ggsave(file_name,plot =per_read_genus_bact_cabb,device = "tiff",width = 15, height = 6, dpi = 300)
 ```
+
 #### Statistic analyses of the bacterial community variation during cabbage fermentation
 ```{r Cabbage Bray-curtis/permanova, message=FALSE, warning=FALSE}
 abundance_kaiju_bacteria_cabbage_obj <-abundance_kaiju_bacteria_cab%>%
   column_to_rownames(.,"genus")
 
 Fermentation_metadata_obj <- Fermentation_metadata
-Fermentation_metadata_obj$Figure_label <- Fermentation_metadata$Samples
-Fermentation_metadata_obj<-column_to_rownames(Fermentation_metadata_obj,"Samples")
+Fermentation_metadata_obj$Figure_label <- Fermentation_metadata$Samples_id
+Fermentation_metadata_obj<-column_to_rownames(Fermentation_metadata_obj,"Samples_id")
 
 obj_Cabbage_metag_bact <- phyloseq(otu_table(abundance_kaiju_bacteria_cabbage_obj, taxa_are_rows = TRUE), sample_data(Fermentation_metadata_obj))
 obj_Cabbage_metag_bact
@@ -622,65 +647,12 @@ p1_metag_bact_cabb_BC <- plot_ordination(obj_Cabbage_metag_bact, ord_PCoA_bc,col
 p1_metag_bact_cabb_BC
 
 
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_cabbage_PCoA_BC_.tiff")
-ggsave(file_name,plot =p1_metag_bact_BC,device = "tiff",width = 10, height = 6, dpi = 300)
+#file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_cabbage_PCoA_BC_.tiff")
+#ggsave(file_name,plot =p1_metag_bact_BC,device = "tiff",width = 10, height = 6, dpi = 300)
 
 ```
 
-#### Combining the graphs for the final figure
-```{r combine cabbage plot, message=FALSE, warning=FALSE}
 
-p_kaiju_cabb <- ggarrange(per_read_kingdom_cabb, per_read_genus_bact_cabb, labels = c("A", "B"),
-          ncol = 2, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")+
-  theme(plot.background = element_rect(fill = "white", color = NA),
-        panel.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1, "cm")) # Ajuster les marges
-p_kaiju_cabb
-
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_combine_Kaiju_cabbage.tiff")
-ggsave(file_name,plot =p_kaiju_cabb,device = "tiff",width = 20, height = 6, dpi = 300)
-```
-
-```{r Cabbage figure, message=FALSE, warning=FALSE}
-p_kaiju_cabb <- ggarrange(per_read_kingdom_cabb,per_read_genus_euk_cabb,per_read_genus_vir_cabb, labels = c("A", "B","C"),
-          ncol = 3, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")+
-  theme(plot.background = element_rect(fill = "white", color = NA),
-        panel.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1,"cm")) # Ajuster les marges
-  
-
-p_kaiju_cabb
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_combine_microb_carrot_euk_vir.svg")
-ggsave(file_name,plot =p_kaiju_cabb,device = "svg",width = 25, height = 8, dpi = 300)
-
-
-p_compo_bact <- ggarrange(per_read_genus_bact_cabb,p1_metag_bact_cabb_BC, labels = c("A","B"),
-          ncol = 2, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")+
-  theme(plot.background = element_rect(fill = "white", color = NA),
-        panel.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1,"cm")) # Ajuster les marges
-p_compo_bact
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_combine_microb_carrot_bact.svg")
-ggsave(file_name,plot =p_compo_bact,device = "svg",width = 18, height = 8, dpi = 300)
-
-p_compo_microb_cabb_VF <- ggarrange(p_kaiju_cabb,p_compo_microb,
-          ncol = 1, nrow = 2, common.legend = FALSE,legend = "right",
-          align = "hv",
-          heights = c(1, 1)) +
-  theme(plot.background = element_rect(fill = "white", color = NA),
-        panel.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1, "cm")) # Ajuster les marges
-p_compo_microb_cabb_VF
-
-
-
-```
 #### Statistics of results
 ```{r Cabbage stat, message=FALSE, warning=FALSE}
 
@@ -709,8 +681,7 @@ reads_summary_cabb_without_unclassifies <- abundance_kaiju_cabbage %>%
   summarise(total_reads = sum(reads, na.rm = TRUE), .groups = "drop") %>%
   mutate(proportion = total_reads / sum(total_reads)) 
 
-# Affichage du résultat
-print(reads_summary)
+
 
 
 ## Bacteria stat
@@ -775,7 +746,6 @@ print(reads_summary_cabb_Archaea)
 ## Analyses of the carrot fermentation
 ## Import kaiju results from carrot fermentation
 ```{r Import data carrot, message=FALSE, warning=FALSE}
-setwd("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/")
 
 CA_0A_Kaiju <- read.delim("results/Kaiju_metag/kaiju_NG-A2640_CA_0A_libLAH8297_summary_viruses.tsv",sep="\t",header = TRUE)
 CA_0B_Kaiju <- read.delim("results/Kaiju_metag/kaiju_NG-A2640_CA_0B_libLAH8298_summary_viruses.tsv",sep="\t",header = TRUE)
@@ -876,6 +846,7 @@ mean_proportion_df <- abundance_kaiju_carrot %>%
 mean_proportion_df
 
 ```
+
 ### Microbial community at the domain level
 ```{r carrot kingdom plot, message=FALSE, warning=FALSE}
 abundance_CA_0A_kingdom <- abundance_summary_ki(CA_0A_Kaiju_process, superkingdom, percent, "CA_0A")
@@ -922,7 +893,7 @@ abundance_long_carrot <- abundance_kaiju_kingdom %>%
 abundance_long_carrot$superkingdom <- factor(abundance_long_carrot$superkingdom , levels = c("Archaea","Bacteria","Eukaryota","Viruses","unclassified"))
 kingdom_col <- c("Archaea"='#d7191c',"Bacteria"='#fdae61',"Eukaryota"='#ffffbf',"unclassified"='#abd9e9', "Viruses"='#2c7bb6' )
 
-abundance_long_carrot2 <- left_join(abundance_long_carrot,Fermentation_metadata, by="Samples")
+abundance_long_carrot2 <- left_join(abundance_long_carrot,Fermentation_metadata, by = c("Samples" = "Samples_id"))
 
 
 per_read_kingdom_carrot <- ggplot(abundance_long_carrot2, aes(fill=superkingdom, y=abundance, x=Samples)) + 
@@ -942,6 +913,7 @@ per_read_kingdom_carrot <- ggplot(abundance_long_carrot2, aes(fill=superkingdom,
 per_read_kingdom_carrot
 
 ```
+
 ### Viral community at the species level
 ```{r carrot viruses plot, message=FALSE, warning=FALSE}
 
@@ -1041,7 +1013,7 @@ abundance_long_viruses_car$species <- factor(abundance_long_viruses_car$species,
 abundance_long_viruses_car$Samples <- factor(abundance_long_viruses_car$Samples, levels = c("CA_0A","CA_0B","CA_0C","CA_2A","CA_2B","CA_2C","CA_7A","CA_7B","CA_7C","CA_14A","CA_14B","CA_14C","CA_21A","CA_21B","CA_21C", "CA_28A", "CA_28B", "CA_28C"))
 
 
-abundance_long_viruses_carr <- left_join(abundance_long_viruses_car,Fermentation_metadata, by="Samples")
+abundance_long_viruses_carr <- left_join(abundance_long_viruses_car,Fermentation_metadata, by = c("Samples" = "Samples_id"))
 
 
 
@@ -1076,6 +1048,7 @@ per_read_genus_vir_carr
 #ggsave(file_name,plot =per_read_genus_vir_cabb,device = "tiff",width = 15, height = 6, dpi = 300)
 
 ```
+
 ### Bacterial community at the genus level
 ```{r carrot bacteria plot, message=FALSE, warning=FALSE}
 
@@ -1149,7 +1122,7 @@ abundance_kaiju_bacteria_carrot3 <- mutate(abundance_kaiju_bacteria_carrot2,genu
 
 abundance_kaiju_bacteria_carrot4 <- abundance_kaiju_bacteria_carrot3[c("genus","CA_0A","CA_0B","CA_0C","CA_2A","CA_2B","CA_2C","CA_7A","CA_7B","CA_7C","CA_14A","CA_14B","CA_14C","CA_21A","CA_21B","CA_21C", "CA_28A", "CA_28B", "CA_28C")]
 
-abundance_long_bacteria_cabbage2 <- left_join(abundance_long_bacteria_cabbage,Fermentation_metadata, by="Samples")
+abundance_long_bacteria_cabbage2 <- left_join(abundance_long_bacteria_cabbage,Fermentation_metadata, by = c("Samples" = "Samples_id"))
 
 
 abundance_long_bacteria_carrot <- abundance_kaiju_bacteria_carrot4 %>%
@@ -1163,7 +1136,7 @@ abundance_long_bacteria_carrot$Samples <- factor(abundance_long_bacteria_carrot$
 
 genus_col <- c("Leuconostoc" = '#a6cee3',"Lactiplantibacillus" = '#b2df8a',"Levilactobacillus" = '#fb9a99',"Weissella" ='#de77ae',"Other" ='#d9d9d9')
 
-abundance_long_bacteria_carrot2 <- left_join(abundance_long_bacteria_carrot,Fermentation_metadata, by="Samples")
+abundance_long_bacteria_carrot2 <- left_join(abundance_long_bacteria_carrot,Fermentation_metadata, by = c("Samples" = "Samples_id"))
 
 per_read_genus_bact_carr <- ggplot(abundance_long_bacteria_carrot2, aes(fill=genus, y=abundance, x=Samples)) + 
   geom_bar(stat="identity", position="stack") +
@@ -1182,8 +1155,8 @@ per_read_genus_bact_carr
 
 
 
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_bacteria_carrot.tiff")
-ggsave(file_name,plot =per_read_genus_bact_carr,device = "tiff",width = 15, height = 6, dpi = 300)
+#file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_bacteria_carrot.tiff")
+#ggsave(file_name,plot =per_read_genus_bact_carr,device = "tiff",width = 15, height = 6, dpi = 300)
 ```
 #### Statistic analyses of the bacterial community variation during carrot fermentation
 ```{r Carrot Bray-curtis/permanova, message=FALSE, warning=FALSE}
@@ -1191,8 +1164,8 @@ abundance_kaiju_bacteria_carrot_obj <-abundance_kaiju_bacteria_carrot%>%
   column_to_rownames(.,"genus")
 
 Fermentation_metadata_obj <- Fermentation_metadata
-Fermentation_metadata_obj$Figure_label <- Fermentation_metadata$Samples
-Fermentation_metadata_obj<-column_to_rownames(Fermentation_metadata_obj,"Samples")
+Fermentation_metadata_obj$Figure_label <- Fermentation_metadata$Samples_id
+Fermentation_metadata_obj<-column_to_rownames(Fermentation_metadata_obj,"Samples_id")
 
 obj_Carrot_metag_bact <- phyloseq(otu_table(abundance_kaiju_bacteria_carrot_obj, taxa_are_rows = TRUE), sample_data(Fermentation_metadata_obj))
 obj_Carrot_metag_bact
@@ -1235,51 +1208,8 @@ p1_metag_bact_BC <- plot_ordination(obj_Carrot_metag_bact, ord_PCoA_bc,color = "
 p1_metag_bact_BC
 
 
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_carrot_PCoA_BC_.tiff")
-ggsave(file_name,plot =p1_metag_bact_BC,device = "tiff",width = 10, height = 6, dpi = 300)
-
-```
-
-#### Combining the graphs for the final figure
-```{r combine carrot plot, message=FALSE, warning=FALSE}
-
-p_kaiju_carrot <- ggarrange(per_read_kingdom_carrot, per_read_genus_bact_carr, labels = c("A", "B"),
-          ncol = 2, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")+
-  theme(plot.background = element_rect(fill = "white", color = NA),
-        panel.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1, "cm")) # Ajuster les marges
-p_kaiju_carrot
-
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_combine_Kaiju_carrot.tiff")
-ggsave(file_name,plot =p_kaiju_carrot,device = "tiff",width = 20, height = 6, dpi = 300)
-```
-
-```{r Carrot figure, message=FALSE, warning=FALSE}
-p_kaiju_carrot <- ggarrange(per_read_kingdom_carrot, per_read_genus_vir_carr, labels = c("A", "B"),
-          ncol = 2, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")
-p_kaiju_carrot
-
-p_compo_microb <- ggarrange(per_read_genus_bact_carr,p1_metag_bact_BC, labels = c("C","D"),
-          ncol = 2, nrow = 1, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")
-p_compo_microb
-
-p_compo_microb_VF <- ggarrange(p_kaiju_carrot,p_compo_microb,
-          ncol = 1, nrow = 2, common.legend = FALSE,legend = "right",
-          heights = c(1, 1), widths = c(5, 5),
-          align = "hv")+
-  theme(plot.background = element_rect(fill = "white", color = NA),
-        panel.background = element_rect(fill = "white", color = NA),
-           plot.margin = margin(1, 1, 1, 1, "cm")) # Ajuster les marges
-p_compo_microb_VF
-
-file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_combine_microb_carrot.tiff")
-ggsave(file_name,plot =p_compo_microb_VF,device = "tiff",width = 18, height = 10, dpi = 300)
+#file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Kaiju_carrot_PCoA_BC_.tiff")
+#ggsave(file_name,plot =p1_metag_bact_BC,device = "tiff",width = 10, height = 6, dpi = 300)
 
 ```
 
@@ -1311,8 +1241,6 @@ reads_summary_carr_without_unclassifies <- abundance_kaiju_carrot %>%
   summarise(total_reads = sum(reads, na.rm = TRUE), .groups = "drop") %>%
   mutate(proportion = total_reads / sum(total_reads)) 
 
-# Affichage du résultat
-print(reads_summary)
 
 
 ## Bacteria stat
@@ -1371,8 +1299,7 @@ reads_summary_carr_Archaea <- abundance_kaiju_carrot %>%
 print(reads_summary_carr_Archaea)
 
 ```
-
-
+######################################################################################################################################################
 # Analyses of the MAGs abundance during cabbage and carrot fermentation.
 
 ## Data import Carrot
@@ -2011,5 +1938,7 @@ mantel(dist_bc_phage, dist_bc_bact, method="pearson", permutations = 999)
 
 
 ```
+
+
 
 
