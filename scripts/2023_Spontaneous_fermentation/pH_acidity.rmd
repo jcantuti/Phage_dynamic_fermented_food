@@ -1,0 +1,283 @@
+---
+title: "Analysis of titratable acidity, pH and lactic acid measurement"
+author: "Julia Cantuti Gendre"
+date: "2025-01-27"
+output: html_document
+---
+
+## Description
+
+This script calculates the mean and standard deviation of pH and acidity measurements for each sample in each replicate in order to plot them on a graph, and then performs statistical tests to highlight the effect of phages on these variables. This script then analyzes the biochemical measurement of lactic acid during fermentation and performs statistical tests to identify any potential effect of the phage on lactic acid production.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import library,message=FALSE, warning=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(gridExtra)
+library(cowplot)
+library(ggpubr)
+library(purrr)
+options(bitmapType = "cairo")
+sessionInfo()
+```
+
+## Importing data
+
+```{r import data, message=FALSE, warning=FALSE}
+setwd("~/Documents/Redaction/Phage_dynamic_fermented_food")
+
+Results_table <- read.table("results/experimental/Experimental_results.csv", header = TRUE, sep = ",", dec=",")
+
+table(Results_table$Samples)
+
+```
+
+## Calculation of mean acidity and standard deviation of each consortium for each day
+
+```{r calcul mean and standard deviation acidity, message=FALSE, warning=FALSE}
+mean_Ac_df <- Results_table %>%
+  group_by(Consortia_condition, Day,Phage) %>%
+  summarise(
+    mean_Ac = mean(Acidity_perc, na.rm = TRUE),   # Calculer la moyenne du pH
+    sd_Ac = sd(Acidity_perc, na.rm = TRUE),       # Calculer l'écart-type du pH
+    .groups = 'drop'
+  )
+mean_Ac_df
+
+```
+
+## Graph showing titratable acidity during carrot fermentation
+
+```{r plot acidity, message=FALSE, warning=FALSE}
+Results_table$Consortia_condition <- factor(Results_table$Consortia_condition, levels = c("NI", "C1","C1P","C1R", "C1RP"))
+
+
+consortia_colors <- c("NI"   = "grey",
+                      "C1"   = "#a6cee3",
+                      "C1P"  = "#1f78b4",
+                      "C1R"  = "#b2df8a",
+                      "C1RP" = "#33a02c")
+
+
+# Création du boxplot avec les points colorés par consortium
+AC_boxplot <- ggplot(Results_table, aes(x = as.factor(Day), y = Acidity_perc)) +
+  geom_boxplot(fill = "white", color = "black", outlier.shape = NA) +  # Boxplot sans outliers
+  geom_jitter(aes(fill = Consortia_condition),
+              width = 0.2, size = 3, shape = 21, color = "black", stroke = 1)+  # Points avec jitter pour éviter le chevauchement
+  scale_fill_manual(values = consortia_colors)+
+  theme_minimal() +
+  labs(x = "Time (day)", y = "Titratable acidity\n (g lactic acid/100mL)", title = "") +
+  theme(legend.title = element_blank())  # Supprime le titre de la légende
+AC_boxplot
+
+
+#ggsave("mean_acidity_J0.png", mean_acidity_J0, width = 5.8, height = 3.5, dpi = 1000)
+
+```
+
+## Calculation of mean pH and standard deviation of each consortium for each day
+
+```{r calcul mean and standard deviation pH, message=FALSE, warning=FALSE}
+mean_pH_df <- Results_table %>%
+  group_by(Consortia_condition, Day,Phage) %>%
+  summarise(
+    mean_pH = mean(pH, na.rm = TRUE),   # Calculer la moyenne du pH
+    sd_pH = sd(pH, na.rm = TRUE),       # Calculer l'écart-type du pH
+    .groups = 'drop'
+  )
+mean_pH_df
+
+```
+
+## Graph showing pH during carrot fermentation
+
+```{r plot pH, message=FALSE, warning=FALSE}
+Results_table$Consortia_condition <- factor(Results_table$Consortia_condition,
+                                            levels = c("NI", "C1", "C1P", "C1R", "C1RP"))
+
+consortia_colors <- c("NI"   = "grey",
+                      "C1"   = "#a6cee3",
+                      "C1P"  = "#1f78b4",
+                      "C1R"  = "#b2df8a",
+                      "C1RP" = "#33a02c")
+
+pH_boxplot <- ggplot(Results_table, aes(x = as.factor(Day), y = pH)) +
+  geom_boxplot(fill = "white", color = "black", outlier.shape = NA) +
+  geom_jitter(aes(fill = Consortia_condition),
+              width = 0.2, size = 3, shape = 21, color = "black", stroke = 1) +
+  scale_fill_manual(values = consortia_colors) +
+  theme_minimal() +
+  labs(x = "Time (day)", y = "pH", title = "", fill = "Consortia condition")+
+  theme(legend.title = element_blank())  # Supprime le titre de la légende
+
+pH_boxplot
+```
+
+#### Grouping plots
+
+```{r plot combined acidity, message=FALSE, warning=FALSE}
+Acidity_group_BP <- ggarrange(pH_boxplot,AC_boxplot,labels = c("A", "B"),
+  common.legend = TRUE,
+  legend = "right",
+  ncol = 2)+
+  theme(plot.background = element_rect(fill = "white", color = NA),
+           plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"))
+Acidity_group_BP 
+
+setwd("~/Documents/Redaction/Phage_dynamic_fermented_food")
+
+file_name <- paste0("results/graph/", Sys.Date(), "_Figure_6AB.svg")
+ggsave(file_name, plot = Acidity_group_BP, device = "svg", width = 10, height = 5, create.dir = TRUE)
+
+```
+
+A)  & B) Boxplots represent the distribution of the pH (A) and titratable acidity (B) values of each replicate for each of the four tested consortia and the control, in the absence ( ) and presence (⦁) of phage. Titratable acidity is expressed in grams of lactic acid equivalent per 100 mL of exudate.
+
+## Statistic test about the phage effect on acidity during the fermentation
+
+This test was used to check whether phages significantly modify pH or acidity at different stages of fermentation for each consortium. A significant p-value would suggest that phages influence the acid-base dynamics of the fermentation system.
+
+```{r Wilcoxon test function , message=FALSE, warning=FALSE}
+
+test_wilcoxon <- function(df, consortia, sampling_day, variable) {
+  data_temp <- df %>% filter(Day == sampling_day, Consortia == consortia)
+  
+  # Check if Phage has exactly two levels
+  if (length(unique(data_temp$Phage)) != 2) {
+    print(paste("There are not two levels for Phage in", consortia, "on day", sampling_day))
+    return(NA)
+  }
+  
+  # Select the variable dynamically
+  data_temp <- data_temp %>% select(Phage, value = {{ variable }})
+
+  # Check and convert to numeric if necessary
+  if (!is.numeric(data_temp$value)) {
+    data_temp$value <- as.numeric(data_temp$value)
+  }
+
+  # Wilcoxon test
+  test_result <- wilcox.test(value ~ Phage, data = data_temp)
+
+  p_value <- test_result$p.value
+  print(paste("Wilcoxon test | Consortia:", consortia, "| Day:", sampling_day, "| Variable:", deparse(substitute(variable)), "| p-value:", p_value))  # Debug
+
+  return(p_value)
+}
+
+```
+
+```{r Statistic test of phage impact on pH and acidity, message=FALSE, warning=FALSE}
+# Delete NI samples from dataframe
+all_rep_filtered <- Results_table %>% filter(Consortia != "NI")
+
+# Check phage level
+all_rep_filtered$Phage <- factor(all_rep_filtered$Phage, levels = c("Yes", "No"))
+
+# List of days and consortia
+days <- unique(all_rep_filtered$Day)
+consortia_list <- unique(all_rep_filtered$Consortia)
+
+resultats_pH_phage <- expand.grid(Consortia = consortia_list, Day = days) %>%
+  rowwise() %>%
+  mutate(Variable = "pH",result = list(test_wilcoxon(all_rep_filtered, Consortia, Day, !!sym("pH"))))%>% 
+  unnest(result, names_sep = "_") %>%  
+  ungroup()
+
+resultats_AC_phage <- expand.grid(Consortia = consortia_list, Day = days) %>%
+  rowwise() %>%
+  mutate(Variable = "Acidity_perc",result = list(test_wilcoxon(all_rep_filtered, Consortia, Day, !!sym("Acidity_perc"))))%>% 
+  unnest(result, names_sep = "_") %>%  
+  ungroup()
+
+```
+
+No significant effect of phage PLE001 addition on pH or titratable acidity values was observed (Wilcoxon test, p \> 0.05).
+
+## Calculation of mean and standard deviation of lactic acid concentration of each consortium for each day
+
+```{r calcul mean and standard deviation bacteria, message=FALSE, warning=FALSE}
+mean_Lactic_acid_df <- Results_table %>%
+  group_by(Consortia_condition, Day) %>%
+  summarise(
+    mean_LA = mean(Lactic_acid_.g.L., na.rm = TRUE),
+    sd_LA = sd(Lactic_acid_.g.L., na.rm = TRUE),
+    .groups = 'drop'
+  )
+mean_Lactic_acid_df
+
+mean_Lactic_acid_df_day <- Results_table %>%
+  group_by( Day) %>%
+  summarise(
+    mean_LA = mean(Lactic_acid_.g.L., na.rm = TRUE),
+    sd_LA = sd(Lactic_acid_.g.L., na.rm = TRUE),
+    .groups = 'drop'
+  )
+mean_Lactic_acid_df_day
+```
+
+## Representation of the lactic acid concentration for each consortia during the fermentation
+
+```{r plot Lactic acid, message=FALSE, warning=FALSE}
+mean_Lactic_acid_df$Consortia_condition <- factor(mean_Lactic_acid_df$Consortia_condition, levels = c("NI", "C1","C1P","C1R", "C1RP"))
+
+
+mean_Lactic_acid_ph <- ggplot(mean_Lactic_acid_df, aes(x = Consortia_condition, y = mean_LA, fill = Consortia_condition)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.7), width = 0.5) +
+  geom_errorbar(aes(ymin = mean_LA - sd_LA, ymax = mean_LA + sd_LA),
+                width = 0.2,                     
+                position = position_dodge(0.7)) + 
+  scale_fill_manual(values = c("grey","#a6cee3", "#1f78b4", "#b2df8a", "#33a02c")) +
+  labs(title = "",
+       x = "",
+       y = "Lactic acid \n (g/L)") +
+scale_y_continuous(breaks = seq(0, 20, 5)) +
+  coord_cartesian(ylim = c(0,20))+
+  facet_wrap(~Day,  
+             labeller = labeller(Day = c(`0` = "Day 0", `3` = "Day 3", `28` = "Day 28")))+
+  theme_bw()+
+  theme(panel.background = element_rect(fill="white"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14),
+        strip.text = element_text(size = 12))+
+    geom_hline(data = filter(mean_Lactic_acid_df, Day == 0), aes(yintercept = 3.23), linetype = "dashed", color = "red") +
+  geom_hline(data = filter(mean_Lactic_acid_df, Day == 3), aes(yintercept = 3.23), linetype = "dashed", color = "red") +
+  geom_hline(data = filter(mean_Lactic_acid_df, Day == 28), aes(yintercept = 3.23), linetype = "dashed", color = "red")
+mean_Lactic_acid_ph
+
+```
+
+Evolution of lactic acid production during carrot fermentation. Concentrations are expressed in g/L of exudate.
+
+## Statistic test about the phage effect on lactic acid concentration
+
+The test answers the following biological question: ‘Are there significant differences in lactic acid concentration during fermentation between samples with and without phage, for a specific consortium and on a given day?’ The Wilcoxon test compares the medians of the two groups (with and without phage).
+
+```{r Statistic for lactic acid, message=FALSE, warning=FALSE}
+# Retirer le consortium "NI" de all_rep
+all_rep_filtered <- Results_table %>% filter(Consortia != "NI")
+
+# Vérification des niveaux de Phage avant tout
+all_rep_filtered$Phage <- factor(all_rep_filtered$Phage, levels = c("Yes", "No"))
+
+# List of days and consortia
+jours <- unique(all_rep_filtered$Day)
+consortia_list <- unique(all_rep_filtered$Consortia)
+
+resultats_LA_phage <- expand.grid(Consortia = consortia_list, Day = jours) %>%
+  rowwise() %>%
+  mutate(Variable = "Lactic_acid_.g.L.",result = list(test_wilcoxon(all_rep_filtered, Consortia, Day, !!sym("Lactic_acid_.g.L."))))%>% 
+  unnest(result, names_sep = "_") %>%  
+  ungroup()
+```
+
+The addition of phage PLE001 did not significantly affect lactic acid production in all consortia (Wilcoxon test, p \> 0.05).

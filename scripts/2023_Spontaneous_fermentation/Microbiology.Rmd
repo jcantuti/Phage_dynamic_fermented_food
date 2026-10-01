@@ -1,0 +1,437 @@
+---
+title: "Analysis of microbial enumeration results"
+author: "Julia Cantuti Gendre"
+date: "2025-02-17"
+output: html_document
+---
+
+## Description
+This script calculates the mean and standard deviation of the microbial counts for each bacterium in order to plot them on a graph, and then performs statistical tests to highlight the effect of phages on the levels of each bacterium in each consortium.
+
+```{r import library,message=FALSE, warning=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(gridExtra)
+library(cowplot)
+library(ggpubr)
+sessionInfo()
+```
+
+## Importing data
+
+```{r import data, message=FALSE, warning=FALSE}
+setwd("~/Documents/Redaction/Phage_dynamic_fermented_food")
+
+Results_table <- read.table("results/experimental/Experimental_results.csv", header = TRUE, sep = ",", dec=",")
+```
+
+## Calculation of mean and standard deviation of each bacteria per consortium for each day 
+
+```{r calcul mean and standard deviation bacteria, message=FALSE, warning=FALSE}
+mean_R_aqua_df <- Results_table %>%
+  group_by(Consortia_condition, Day) %>%
+  summarise(
+    mean_R_aqua = mean(R_aquatilis_.CFU.g., na.rm = TRUE),
+    sd_R_aqua = sd(R_aquatilis_.CFU.g., na.rm = TRUE),
+    mean_log10_R_aqua = log10(mean(R_aquatilis_.CFU.g., na.rm = TRUE)),   
+    sd_log10_R_aqua = log10(mean(R_aquatilis_.CFU.g., na.rm = TRUE) + sd(R_aquatilis_.CFU.g., na.rm = TRUE)) - log10(mean(R_aquatilis_.CFU.g., na.rm = TRUE)),
+    .groups = 'drop'
+  )
+mean_R_aqua_df
+
+mean_R_aqua_df_day <- mean_R_aqua_df %>%
+  group_by(Day) %>%
+  summarise(
+    mean_log10_R_aqua_day = mean(mean_log10_R_aqua, na.rm = TRUE),   
+    sd_log10_R_aqua_day =  sd(mean_log10_R_aqua, na.rm = TRUE),
+    .groups = 'drop'
+)
+mean_R_aqua_df_day
+
+mean_L_planta_df <- Results_table %>%
+  group_by(Consortia_condition, Day) %>%
+  summarise(
+    mean_L_planta = mean(L_plantatarum_.CFU.g., na.rm = TRUE),
+    sd_L_planta = sd(L_plantatarum_.CFU.g., na.rm = TRUE),
+    mean_log10_L_planta = log10(mean(L_plantatarum_.CFU.g., na.rm = TRUE)),   
+    sd_log10_L_planta = log10(mean(L_plantatarum_.CFU.g., na.rm = TRUE) + sd(L_plantatarum_.CFU.g., na.rm = TRUE)) - log10(mean(L_plantatarum_.CFU.g., na.rm = TRUE)),
+    .groups = 'drop'
+  )
+mean_L_planta_df
+
+mean_L_planta_df_day <- mean_L_planta_df %>%
+  group_by(Day) %>%
+  summarise(
+    mean_log10_L_planta_day = mean(mean_log10_L_planta, na.rm = TRUE),   
+    sd_log10_L_planta_day =  sd(mean_log10_L_planta, na.rm = TRUE),
+    .groups = 'drop'
+)
+mean_L_planta_df_day
+
+mean_L_mes_df <- Results_table %>%
+  group_by(Consortia_condition, Day) %>%
+  summarise(
+    mean_L_mes = mean(L_mesenteroides_.CFU.g., na.rm = TRUE),
+    sd_L_mes = sd(L_mesenteroides_.CFU.g., na.rm = TRUE),
+    mean_log10_L_mes = log10(mean(L_mesenteroides_.CFU.g., na.rm = TRUE)),   
+    sd_log10_L_mes = log10(mean(L_mesenteroides_.CFU.g., na.rm = TRUE) + sd(L_mesenteroides_.CFU.g., na.rm = TRUE)) - log10(mean(L_mesenteroides_.CFU.g., na.rm = TRUE)),
+    .groups = 'drop'
+  )
+mean_L_mes_df
+
+mean_L_mes_df_day <- mean_L_mes_df %>%
+  group_by(Day) %>%
+  summarise(
+    mean_log10_L_mes_day = mean(mean_log10_L_mes, na.rm = TRUE),   
+    sd_log10_L_mes_day =  sd(mean_log10_L_mes, na.rm = TRUE),
+    .groups = 'drop'
+)
+mean_L_mes_df_day
+
+
+mean_PLE001_df <- Results_table %>%
+  group_by(Consortia_condition,Day) %>%
+  summarise(
+    mean_PLE001 = mean(PLE001_.PFU.g., na.rm = TRUE),
+    sd_PLE001 = sd(PLE001_.PFU.g., na.rm = TRUE),
+    mean_log10_PLE001 = log10(mean(PLE001_.PFU.g., na.rm = TRUE)),   
+    sd_log10_PLE001 = log10(mean(PLE001_.PFU.g., na.rm = TRUE) + sd(PLE001_.PFU.g., na.rm = TRUE)) - log10(mean(PLE001_.PFU.g., na.rm = TRUE)),
+    .groups = 'drop'
+  )
+mean_PLE001_df
+
+all_rep_phage <- subset(Results_table, Results_table$Phage=='Yes') 
+all_rep_corrected <- all_rep_phage %>%
+  mutate(PLE001_.PFU.g. = ifelse(PLE001_.PFU.g. == 1250, 1000, PLE001_.PFU.g.))
+
+mean_PLE001_df_corrected <- all_rep_corrected %>%
+  group_by(Consortia_condition,Day) %>%
+  summarise(
+    mean_PLE001 = mean(PLE001_.PFU.g., na.rm = TRUE),
+    sd_PLE001 = sd(PLE001_.PFU.g., na.rm = TRUE),
+    mean_log10_PLE001 = log10(mean(PLE001_.PFU.g., na.rm = TRUE)),   
+    sd_log10_PLE001 = log10(mean(PLE001_.PFU.g., na.rm = TRUE) + sd(PLE001_.PFU.g., na.rm = TRUE)) - log10(mean(PLE001_.PFU.g., na.rm = TRUE)),
+    .groups = 'drop'
+  )
+mean_PLE001_df_corrected
+
+
+
+```
+
+## Representation of the bacterial community for each bacterium constituting the consortia
+
+### Barplot representation of *Rahnella aquatillis* during fermentation
+
+```{r plot Rahnella, message=FALSE, warning=FALSE}
+mean_R_aqua_df$Consortia_condition <- factor(mean_R_aqua_df$Consortia_condition, levels = c("NI", "C1","C1P", "C1R", "C1RP"))
+
+graph_R_aqua <- ggplot(mean_R_aqua_df, aes(x = Consortia_condition, y = mean_log10_R_aqua, fill = Consortia_condition)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.7), width = 0.5) +
+  geom_errorbar(aes(ymin = mean_log10_R_aqua - sd_log10_R_aqua, ymax = mean_log10_R_aqua + sd_log10_R_aqua),
+                width = 0.2,                     
+                position = position_dodge(0.7)) + 
+  scale_fill_manual(values = c("grey","#a6cee3", "#1f78b4", "#b2df8a", "#33a02c")) +
+  facet_wrap(~Day,  
+             labeller = labeller(Day = c(`0` = "Day 0", `3` = "Day 3", `28` = "Day 28")))+
+  labs(title = "",
+       x = "",
+       y = "Rahnella aquatilis \n log(10)CFU/g",
+       fill = "Consortia") +
+  scale_y_continuous(breaks = seq(0, 9, 0.5)) +
+  coord_cartesian(ylim = c(2,9)) +
+  
+  # Horizontal line for Day 0 to y = 2
+  geom_hline(data = subset(mean_R_aqua_df, Day == 0), 
+             aes(yintercept = 2), 
+             linetype = "dashed", color = "red") +
+  
+  # Horizontal line for Day 3 and Day 28 at y = 3.3
+  geom_hline(data = subset(mean_R_aqua_df, Day %in% c(3, 28)), 
+             aes(yintercept = 5), 
+             linetype = "dashed", color = "red") +
+
+  theme_bw() +
+  theme(panel.background = element_rect(fill="white"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14),
+        strip.text = element_text(size = 12))
+
+graph_R_aqua
+
+```
+
+Viable counts of Rahnella aquatilis CIRMBIA 2785.Bar indicates the average value of four replicates (independent laboratory-scale productions) in log CFU/g of vegetables, with error bars representing the standard deviation. The dashed red line indicates the detection limit for microbial enumeration (2 CFU/g for day 0 and 5 CFU/g for day 3 and 28).
+
+### Barplot representation of *Leuconostoc mesenteroides* during fermentation
+
+```{r plot L.mesenteroides, message=FALSE, warning=FALSE}
+mean_L_mes_df$Consortia_condition <- factor(mean_L_mes_df$Consortia_condition, levels = c("NI", "C1","C1P","C1R", "C1RP"))
+
+
+table(mean_L_mes_df$Consortia_condition)
+graph_L_mes <- ggplot(mean_L_mes_df, aes(x = Consortia_condition, y = mean_log10_L_mes, fill = Consortia_condition)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.7), width = 0.5) +
+  geom_errorbar(aes(ymin = mean_log10_L_mes - sd_log10_L_mes, ymax = mean_log10_L_mes + sd_log10_L_mes),
+                width = 0.2,                     
+                position = position_dodge(0.7)) + 
+  scale_fill_manual(values = c("grey","#a6cee3", "#1f78b4", "#b2df8a", "#33a02c")) +
+  facet_wrap(~Day,  
+             labeller = labeller(Day = c(`0` = "Day 0", `3` = "Day 3", `28` = "Day 28")))+
+  labs(title = "",
+       x = "",
+       y = "Leuconostoc mesenteroides \n log(10)CFU/g",
+       fill = "Consortia") +
+  scale_y_continuous(breaks = seq(0, 9, 0.5)) +
+  coord_cartesian(ylim = c(2,9)) +
+  
+  # Horizontal line for Day 0 to y = 2
+  geom_hline(data = subset(mean_L_mes_df, Day == 0), 
+             aes(yintercept = 2), 
+             linetype = "dashed", color = "red") +
+  
+  # Horizontal line for Day 3 and Day 28 at y = 3.3
+  geom_hline(data = subset(mean_L_mes_df, Day %in% c(3, 28)), 
+             aes(yintercept = 5), 
+             linetype = "dashed", color = "red") +
+
+  theme_bw() +
+  theme(panel.background = element_rect(fill="white"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14),
+        strip.text = element_text(size = 12))
+
+graph_L_mes
+
+setwd("~/Documents/Redaction/Phage_dynamic_fermented_food")
+
+file_name <- paste0("results/graph/", Sys.Date(), "_Figure_6C.svg")
+ggsave(file_name, plot = graph_L_mes, device = "svg", width = 10, height = 5, create.dir = TRUE)
+
+```
+
+Viable counts of Leuconostoc mesenteroides. Bar indicates the average value of four replicates (independent laboratory-scale productions) in log CFU/g of vegetables, with error bars representing the standard deviation. The dashed red line indicates the detection limit for microbial enumeration (2 CFU/g for day 0 and 5 CFU/g for day 3 and 28). 
+
+### Barplot representation of *Lactiplantibacillus plantarum* during fermentation
+
+```{r plot L.plantarum, message=FALSE, warning=FALSE}
+mean_L_planta_df$Consortia_condition <- factor(mean_L_planta_df$Consortia_condition, levels = c("NI", "C1","C1P", "C1R", "C1RP"))
+
+graph_L_planta <- ggplot(mean_L_planta_df, aes(x = Consortia_condition, y = mean_log10_L_planta, fill = Consortia_condition)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.7), width = 0.5) +
+  geom_errorbar(aes(ymin = mean_log10_L_planta - sd_log10_L_planta, ymax = mean_log10_L_planta + sd_log10_L_planta),
+                width = 0.2,                     
+                position = position_dodge(0.7)) + 
+  scale_fill_manual(values = c("grey","#a6cee3", "#1f78b4", "#b2df8a", "#33a02c")) +
+  facet_wrap(~Day,  
+             labeller = labeller(Day = c(`0` = "Day 0", `3` = "Day 3", `28` = "Day 28")))+
+  labs(title = "",
+       x = "",
+       y = "Lactiplantibacillus plantarum \n log(10)CFU/g",
+       fill = "Consortia") +
+  scale_y_continuous(breaks = seq(0, 9, 0.5)) +
+  coord_cartesian(ylim = c(2,9)) +
+  
+  # Horizontal line for Day 0 to y = 2
+  geom_hline(data = subset(mean_L_planta_df, Day == 0), 
+             aes(yintercept = 2), 
+             linetype = "dashed", color = "red") +
+  
+  # Horizontal line for Day 3 and Day 28 at y = 3.3
+  geom_hline(data = subset(mean_L_planta_df, Day %in% c(3, 28)), 
+             aes(yintercept = 5), 
+             linetype = "dashed", color = "red") +
+
+  theme_bw() +
+  theme(panel.background = element_rect(fill="white"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14),
+        strip.text = element_text(size = 12))
+
+graph_L_planta
+```
+
+Viable counts of Lactiplantibacillus plantarum CIRM-BIA 2443.Bar indicates the average value of four replicates (independent laboratory-scale productions) in log CFU/g of vegetables, with error bars representing the standard deviation. The dashed red line indicates the detection limit for microbial enumeration (2 CFU/g for day 0 and 5 CFU/g for day 3 and 28).
+
+## Representation of the phage PLE001 titration during the fermentation
+
+### Barplot representation of phage PLE001 titration during fermentation
+
+```{r bareplot PLE001, message=FALSE, warning=FALSE}
+mean_PLE001_df$Consortia_condition <- factor(mean_PLE001_df$Consortia_condition, levels = c("NI", "C1","C1P", "C1R", "C1RP"))
+
+
+graph_PLE001 <- ggplot(mean_PLE001_df, aes(x = Consortia_condition, y = mean_log10_PLE001, fill = Consortia_condition)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.7), width = 0.5) +
+  geom_errorbar(aes(ymin = mean_log10_PLE001 - sd_log10_PLE001, ymax = mean_log10_PLE001 + sd_log10_PLE001),
+                width = 0.2,                     
+                position = position_dodge(0.7)) + 
+  scale_fill_manual(values = c("grey","#a6cee3", "#1f78b4", "#b2df8a", "#33a02c")) +
+  facet_wrap(~Day,  
+             labeller = labeller(Day = c(`0` = "Day 0", `3` = "Day 3", `28` = "Day 28")))+
+  labs(title = "",
+       x = "",
+       y = "Leuconostoc phage PLE001 \n log(10)PFU/g",
+       fill = "Consortia") +
+scale_y_continuous(breaks = seq(0, 6, 0.5)) +
+  coord_cartesian(ylim = c(2,6))+
+  geom_hline(aes(yintercept = 3), linetype = "dashed", color = "red")+
+  theme_bw()+
+  theme(panel.background = element_rect(fill="white"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14),
+        strip.text = element_text(size = 12))
+
+  
+  
+graph_PLE001
+
+```
+
+Concentration of Leuconostoc phage PLE001 in log PFU/g during carrot fermentation. The dotted red bar represents the limit of detection for phage titration set at 3.1 log CFU/g.
+
+### Phage production dynamics between D0 and D3 of fermentation consortia infected with phage PLE001. 
+
+```{r plot PLE001, message=FALSE, warning=FALSE}
+data_filtered <- mean_PLE001_df %>%
+  filter(Consortia_condition %in% c("C1P", "C1RP")) %>%
+  select(Consortia_condition, Day, mean_log10_PLE001, sd_log10_PLE001) %>%
+  pivot_wider(names_from = Day, values_from = c(mean_log10_PLE001, sd_log10_PLE001)) %>%
+  mutate(
+    delta_log10_PLE001 = `mean_log10_PLE001_3` - `mean_log10_PLE001_0`, 
+    delta_sd = sqrt(`sd_log10_PLE001_3`^2 + `sd_log10_PLE001_0`^2) 
+  ) %>%
+  select(Consortia_condition, delta_log10_PLE001, delta_sd)
+
+
+# Creating a chart with standard deviations
+delta_log_J3 <- ggplot(data_filtered, aes(x = Consortia_condition, y = delta_log10_PLE001, color = Consortia_condition)) +
+  geom_segment(aes(x = Consortia_condition, xend = Consortia_condition, y = 0, yend = delta_log10_PLE001), color = "gray") +
+  geom_point(size = 4) +
+  geom_errorbar(aes(ymin = delta_log10_PLE001 - delta_sd, ymax = delta_log10_PLE001 + delta_sd), width = 0.2) +  
+  scale_color_manual(values = c("C1P" = "#1f78b4",
+                                "C1RP" = "#33a02c")) +
+  theme_minimal() +
+  labs(y = "Δlog10 (PFU/g)", x = "",
+       title = "") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  theme(legend.position = "none",
+        plot.background = element_rect(fill = "white", color = NA),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 20))
+delta_log_J3
+
+
+setwd("~/Documents/Redaction/Phage_dynamic_fermented_food")
+
+file_name <- paste0("results/graph/", Sys.Date(), "_Figure_6D.svg")
+ggsave(file_name, plot = delta_log_J3, device = "svg", width = 10, height = 8, create.dir = TRUE)
+
+```
+
+Phage production dynamics between D0 and D3 of fermentation consortia infected with phage PLE001. The ∆log10 represents the ratio between PFU counts at D0 and D3.
+
+
+## Statistical analysis about the phage effect on the microbial community
+
+The test answers the following biological question: ‘Are there significant differences in microbial community during fermentation between samples with and without phage, for a specific species and on a given day?’ The Wilcoxon test compares the medians of the two groups (with and without phage).
+
+```{r Wilcoxon test function, message=FALSE, warning=FALSE}
+# Function to perform the Wilcoxon test for a given variable
+test_wilcoxon <- function(df, consortia, sampling_day, variable) {
+  data_temp <- df %>% filter(Day == sampling_day, Consortia == consortia)
+  print(nrow(data_temp)) 
+  # Check if Phage has exactly two levels
+  if (length(unique(data_temp$Phage)) != 2) {
+    print(paste("There are not two levels for Phage in", consortia, "on day", sampling_day))
+    return(NA)
+  }
+  
+  # Select the variable dynamically
+  data_temp <- data_temp %>% select(Phage, value = {{ variable }})
+
+  # Check and convert to numeric if necessary
+  if (!is.numeric(data_temp$value)) {
+    data_temp$value <- as.numeric(data_temp$value)
+  }
+
+  # Wilcoxon test
+  test_result <- wilcox.test(value ~ Phage, data = data_temp)
+
+  p_value <- test_result$p.value
+  print(paste("Wilcoxon test | Consortia:", consortia, "| Day:", sampling_day, "| Variable:", deparse(substitute(variable)), "| p-value:", p_value))  # Debug
+
+  return(p_value)
+}
+```
+
+```{r Statistical tests, message=FALSE, warning=FALSE}
+
+# Retirer le consortium "NI" de all_rep
+all_rep_filtered <- Results_table %>% filter(Consortia != "NI")
+
+# Vérification des niveaux de Phage avant tout
+all_rep_filtered$Phage <- factor(all_rep_filtered$Phage, levels = c("Yes", "No"))
+
+# List of days and consortia
+jours <- unique(all_rep_filtered$Day)
+consortia_list <- unique(all_rep_filtered$Consortia)
+
+resultats_RA <- expand.grid(Consortia = consortia_list, Day = jours) %>%
+  rowwise() %>%
+  mutate(
+    p_value = test_wilcoxon(all_rep_filtered, Consortia, Day, !!sym("R_aquatilis_.CFU.g.")),
+    test = "Wilcoxon",
+    variable_tested = "Phages-L.mesenteroides enumeration"
+  ) %>%
+  ungroup()
+
+resultats_LP <- expand.grid(Consortia = consortia_list, Day = jours) %>%
+  rowwise() %>%
+  mutate(
+    p_value = test_wilcoxon(all_rep_filtered, Consortia, Day, !!sym("L_plantatarum_.CFU.g.")),
+    test = "Wilcoxon",
+    variable_tested = "Phages-L.plantarum enumeration"
+  ) %>%
+  ungroup()
+
+
+resultats_LM <- expand.grid(Consortia = consortia_list, Day = jours) %>%
+  rowwise() %>%
+  mutate(
+    p_value = test_wilcoxon(all_rep_filtered, Consortia, Day, !!sym("L_mesenteroides_.CFU.g.")),
+    test = "Wilcoxon",
+    variable_tested = "Phages-L.mesenteroides enumeration"
+  ) %>%
+  ungroup()
+
+
+
+# Display results
+print(resultats_RA)
+print(resultats_LP)
+print(resultats_LM)
+
+
+```
+
+The only statistically significant effect of phage addition on bacterial population levels was observed on day 3 in the viable counts of *Leuconostoc mesenteroides* in consortium C1 (Wilcoxon test, p \< 0.05).

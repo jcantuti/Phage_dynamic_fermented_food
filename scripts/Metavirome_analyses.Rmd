@@ -1,0 +1,1375 @@
+---
+title: "Metavirome_analyses"
+author: "Julia Gendre"
+date: "2024-09-11"
+output: html_document
+header-includes:
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.show = "asis",message = FALSE,warning = FALSE, tidy = FALSE )
+knitr::opts_knit$set(root.dir = "/work_projet/metasimfood/metavirome/Phage_dynamic_fermented_food/")
+```
+
+## Packages loading
+
+```{r packages, message=FALSE, warning=FALSE}
+library(phyloseq)
+library(readxl)  
+library(phyloseq.extended)
+library(vegan)
+library(gridExtra)
+library(rstatix)
+library(gplots)
+library(tidyverse)
+library(DT)
+library(pheatmap)
+library(DESeq2)
+library(ggplotify)
+library(cowplot)
+library(ggpubr)
+library(ggforce)
+library(ggplot2)
+library(ggrepel)
+library(ggbreak)
+library(VennDiagram)
+library(grid)
+library(factoextra)
+library(pairwiseAdonis)
+library(Hmisc)
+library(dplyr)
+library(tibble)
+library(forcats)
+library(multcomp)
+sessionInfo()
+
+```
+
+## Data import
+
+```{r Import data, message=FALSE, warning=FALSE}
+
+#Import count matrix of all samples
+count <- read.table("results/Viral_prediction/VIRAL_CONTIGS/MAPPING_BWA-MEM2/presence_counts.csv") 
+count <- count[-1:-2,] #delete 2 firsts line that don't corresponding to contigs.
+
+sum_col_count<- colSums(count)
+
+sample_metadata <- read.csv("METADATA/sample_metadata.csv", sep = ";", dec="," ,row.names = 1)
+
+# import contig length
+Contig_Length <- read.table("results/Dereplication/contig_lengths_no_chimeras.tab") %>% dplyr::rename(Contig = V1, Length = V2)
+
+# iphop annotations
+iphop <- read.table("results/Iphop/Host_prediction_to_genus_m90.csv", sep =",", header = T) %>%
+  dplyr::rename(Contig = Virus, Host_genus_iphop = Host.genus, Confidence_score_iphop = Confidence.score) %>% #rename column name
+  dplyr::select(Contig, Host_genus_iphop, Confidence_score_iphop) %>% #selection of columns of interest
+  group_by(Contig) %>% # group contigs
+  filter(!duplicated(Contig)) %>% #delete duplicated contigs.
+  separate_wider_delim(cols = Host_genus_iphop, delim = ";", names = c("Host_domain", "Host_phylum", "Host_class", "Host_order", "Host_family", "Host_genus")) %>% # separate the column that contain all taxa affiliation in different columns.
+  mutate(Host_domain = str_replace_all(Host_domain, "d__", "")) %>% #Remove certain specific characters from the column cells 
+  mutate(Host_phylum = str_replace_all(Host_phylum, "p__", "")) %>%
+  mutate(Host_phylum = str_replace_all(Host_phylum, "_A", "")) %>%
+  mutate(Host_class = str_replace_all(Host_class, "c__", "")) %>%
+  mutate(Host_order = str_replace_all(Host_order, "o__", "")) %>%
+  mutate(Host_order = str_replace_all(Host_order, "_H", "")) %>%
+  mutate(Host_family = str_replace_all(Host_family, "f__", "")) %>%
+  mutate(Host_family = str_replace_all(Host_family, "_G", "")) %>%
+  mutate(Host_genus = str_replace_all(Host_genus, "g__", "")) %>%
+  mutate(Host_genus = str_replace_all(Host_genus, "_A", "")) %>%
+  mutate(Host_genus = str_replace_all(Host_genus, "_B", "")) %>%
+  mutate(Host_genus = str_replace_all(Host_genus, "_E", ""))
+
+
+# vibrant annotations
+vibrant <- read.table("results/Viral_prediction/VIBRANT/VIBRANT_contigs_derep/VIBRANT_results_contigs_derep/VIBRANT_genome_quality_contigs_derep.tsv", sep="\t", header = T) %>%
+  dplyr::rename(Contig = scaffold, Type_vibrant = type, Quality_vibrant = Quality) %>%
+  filter(Quality_vibrant!='complete circular')
+vibrant$Type_vibrant[vibrant$Type_vibrant=='lytic'] <- 'Virulent' #Replace all cell that contain "lytic" by "Virulent
+vibrant$Type_vibrant[vibrant$Type_vibrant=='lysogenic'] <- 'Temperate'
+
+# virsorter annotations
+Virsorter <-read.table("results/Viral_prediction/VIRSORTER2/final-viral-boundary.tsv", sep="\t", header = T) %>%
+  .[,c("seqname","group")] %>% #selection of these both columns
+  dplyr::rename(Contig = seqname) # rename column seqname by Contig
+
+#Checkv annotations
+CheckV0 <-read.table("results/Viral_prediction/CHECKV/quality_summary.tsv", sep="\t", header = T) 
+CheckV<- CheckV0%>%
+  .[,c("contig_id","checkv_quality")] %>% #selection of these both columns
+  dplyr::rename(Contig = contig_id) # rename column contig_id by Contig
+
+#Taxonomy affiliation using PHABOX
+PHABOXV0 <- read.table("METADATA/vOTU_taxa.txt", sep="\t", header = T)
+PHABOX<- PHABOXV0 %>%
+  mutate(Superkingdom = str_replace_all(Superkingdom, "superkingdom:", "")) %>% #Remove certain specific characters from the column cells 
+  mutate(Realm = str_replace_all(Realm, "clade:", "")) %>%
+  mutate(Kingdom = str_replace_all(Kingdom, "kingdom:", "")) %>%
+  mutate(Phylum = str_replace_all(Phylum, "phylum:", "")) %>%
+  mutate(Class = str_replace_all(Class, "class:", "")) %>%
+  mutate(Order = str_replace_all(Order, "order:", "")) %>%
+  mutate(Family = str_replace_all(Family, "family:", "")) %>%
+  mutate(Genus = str_replace_all(Genus, "genus:", "")) %>%
+  dplyr::rename(Contig = vOTUs_ID)  # rename column contig_id by Contig
+  
+
+## join all tables
+contigs_info1 <- read.table("results/Viral_prediction/VIRAL_CONTIGS/List_contigs_union2.txt",na.strings="")%>%
+  dplyr::rename(Contig = V1)%>% # rename column V1 by Contig
+  left_join(y = Contig_Length, by = "Contig")%>% # merge both table by the column Contigs
+  left_join(y = vibrant, by = "Contig") %>%
+  left_join(y= Virsorter, by = "Contig")%>%
+  left_join(y = iphop, by = "Contig") %>%
+  left_join(y= CheckV, by = "Contig") %>%
+  left_join(y=PHABOX,by = "Contig")
+contigs_info1$group [is.na(contigs_info1$group)] <- 'Unknown' #replace NA cells by unknown
+contigs_info1$group [contigs_info1$group=="NCLDV"] <- 'Nucleocytoviricota (giant viruses)'  #replace NCLDV cells by Nucleocytoviricota (giant viruses)
+contigs_info1$group [contigs_info1$group=="RNA"] <- 'RNA viruses'
+contigs_info1$group [contigs_info1$group=="ssDNA"] <- 'ssDNA viruses'
+contigs_info1$group [contigs_info1$group=="lavidaviridae"] <- 'Lavidaviridae (virophages)'
+
+contigs_info1$Host_family [contigs_info1$Host_family=="UBA1018"] <- 'Bacteriovoracaceae'
+contigs_info1$Host_family [contigs_info1$Host_family=="Rhizobiales"] <- 'Hyphomicrobiales'
+contigs_info1$Host_family [contigs_info1$Host_family=="Burkholderiaceae_B"] <- 'Burkholderiaceae'
+contigs_info1$Host_order [contigs_info1$Host_order=="Enterobacterales_A"] <- 'Enterobacterales'
+contigs_info1$Host_phylum [contigs_info1$Host_phylum=="Bacillota_C"] <- 'Bacillota'
+contigs_info1$Host_order [contigs_info1$Host_order=="SAR86"] <- 'Gammaproteobacteria'
+contigs_info1$Host_order [contigs_info1$Host_order=="UBA1018"] <- 'Bacteriovoracales'
+
+contigs_info1$Host_phylum [is.na(contigs_info1$Host_phylum)] <- 'No prediction' #replace NA cells by unknown
+contigs_info1$Host_order [is.na(contigs_info1$Host_order)] <- 'No prediction' #replace NA cells by unknown
+contigs_info1$Host_family [is.na(contigs_info1$Host_family)] <- 'No prediction' #replace NA cells by unknown
+
+
+
+
+contigs_info<-  column_to_rownames(contigs_info1,var = "Contig")%>%
+  as.matrix() # transform the count abundance table into matrix.
+
+```
+
+
+
+## Removal of the contigs with high abundance only in control
+
+Control water and buffer samples have been removed from the abundance table. Additionally, contigs primarily found in these control samples will be removed under the following conditions:
+
+1.  Present only in water and buffer samples.
+
+2.  Present in high abundance in water and buffer samples but in low abundance in other samples.
+
+```{r control cleaning, message=FALSE, warning=FALSE}
+
+bad_taxa = c("T_V_1000k_NODE_13_length_23093_cov_15.072107",
+             "T_V_1000k_NODE_56_length_13019_cov_7.392491",
+              "T_V_1000k_NODE_9_length_24886_cov_6.334182",
+              "T_V_NODE_7_length_34739_cov_78.425344",
+              "T_V_NODE_4_length_48176_cov_31.113759",
+              "T_V_NODE_104_length_14793_cov_104.961271",
+              "T_V_NODE_13_length_29414_cov_39.305391",
+              "T_V_1000k_NODE_12_length_23419_cov_3.415679",
+              "W1_V_500k_NODE_21_length_17263_cov_3.932773",
+              "CA_0B_V_NODE_56_length_4940_cov_1.522543",
+              "T_V_500k_NODE_24_length_14406_cov_1.990335",
+              "T_V_NODE_112_length_13957_cov_84.059870",
+              "T_V_NODE_52_length_20374_cov_58.245172",
+              "T_V_100k_NODE_25_length_5848_cov_0.829226",
+              "T_V_1000k_NODE_81_length_11275_cov_2.917743",
+              "W1_V_NODE_229_length_5961_cov_33.205348",
+              "T_V_NODE_27_length_24720_cov_28.517180",
+              "T_V_NODE_209_length_8647_cov_53.598826",
+              "T_V_1000k_NODE_30_length_16713_cov_1.892319",
+              "T_V_NODE_22_length_25365_cov_26.715152",
+              "T_V_NODE_130_length_12660_cov_47.610149",
+              "T_V_1000k_NODE_64_length_12619_cov_1.951409",
+              "T_V_1000k_NODE_148_length_7765_cov_3.760932",
+              "T_V_1000k_NODE_73_length_11855_cov_2.388216",
+              "T_V_NODE_115_length_13725_cov_26.154508",
+              "T_V_1000k_NODE_218_length_5631_cov_3.524709",
+              "T_V_NODE_145_length_11681_cov_39.453782",
+              "T_V_1000k_NODE_69_length_12070_cov_1.904044",
+              "T_V_NODE_243_length_7869_cov_53.875743",
+              "W1_V_NODE_117_length_9118_cov_85.232010",
+              "T_V_NODE_86_length_16067_cov_12.726913",
+              "T_V_1000k_NODE_154_length_7568_cov_2.658110",
+              "T_V_1000k_NODE_100_length_9726_cov_2.064486",
+              "W1_V_NODE_112_length_9370_cov_35.870605",
+              "W1_V_NODE_96_length_10280_cov_70.804294",
+              "W1_V_500k_NODE_164_length_4846_cov_8.287985",
+              "T_V_NODE_156_length_10950_cov_19.953248",
+              "T_V_NODE_162_length_10579_cov_15.557979",
+              "W1_V_NODE_119_length_8957_cov_9.429445",
+              "W1_V_NODE_21_length_19574_cov_13.497609",
+              "T_V_NODE_200_length_8994_cov_13.492726",
+              "T_V_NODE_276_length_6855_cov_20.919441",
+              "T_V_NODE_333_length_5442_cov_22.528692",
+              "T_V_500k_NODE_214_length_4196_cov_1.369624",
+              "T_V_500k_NODE_214_length_4196_cov_1.369624",
+              "T_V_1000k_NODE_285_length_4145_cov_0.829766",
+              "T_V_NODE_405_length_4508_cov_3.446017",
+              "W1_V_NODE_145_length_8297_cov_6.021053",
+              "T_V_500k_NODE_443_length_2099_cov_0.447769",
+              "T_V_NODE_285_length_6459_cov_5.294378",
+              "T_V_NODE_290_length_6306_cov_3.606085",
+              "T_V_NODE_338_length_5352_cov_2.890718",
+              "T_V_NODE_603_length_2733_cov_2.466999",
+              "T_V_NODE_539_length_3206_cov_1.638519",
+              "T_V_NODE_630_length_2588_cov_0.894352",
+              "W1_V_500k_NODE_19_length_17675_cov_2.110041",
+              "W1_V_500k_NODE_108_length_6788_cov_0.705600",
+              "W1_V_1000k_NODE_12_length_21902_cov_9.845144",
+              "W1_V_1000k_NODE_32_length_16063_cov_9.498117",
+              "W1_V_1000k_NODE_56_length_13422_cov_3.322527",
+              "W1_V_1000k_NODE_58_length_13234_cov_3.604791",
+              "W1_V_1000k_NODE_128_length_7714_cov_5.103598",
+              "W1_V_1000k_NODE_136_length_7431_cov_1.195783",
+              "W_V_1000k_NODE_12_length_11849_cov_4.785617",
+              "W_V_1000k_NODE_33_length_5693_cov_0.906576",
+              "W_V_1000k_NODE_35_length_5450_cov_4.528086",
+              "W_V_1000k_NODE_56_length_3442_cov_19.229261",
+              "W_V_1000k_NODE_84_length_2398_cov_3.914135",
+              "W_V_1000k_NODE_102_length_2051_cov_8.119543",
+              "SA_28B_V_NODE_293_length_4473_cov_1.719972",
+              "W1_V_NODE_1_length_38460_cov_67.594240",
+              "W1_V_NODE_10_length_25573_cov_27.776075",
+              "W1_V_NODE_45_length_14229_cov_17.107928",
+              "W1_V_NODE_81_length_11207_cov_8.631588",
+              "W1_V_NODE_98_length_10196_cov_8.714867",
+              "W1_V_NODE_107_length_9643_cov_2.562526",
+              "W1_V_NODE_129_length_8690_cov_44.821091",
+              "W1_V_NODE_147_length_8223_cov_1.733819",
+              "W1_V_NODE_203_length_6476_cov_95.062057",
+              "W1_V_NODE_445_length_3312_cov_6.226688",
+              "W1_V_NODE_554_length_2658_cov_1.602924",
+              "W_V_NODE_21_length_8713_cov_11.221989",
+              "W_V_NODE_38_length_6710_cov_3.715327",
+              "W_V_NODE_61_length_5028_cov_16.932259",
+              "W_V_NODE_79_length_4534_cov_18.637622",
+              "W_V_NODE_84_length_4337_cov_4.519952",
+              "W_V_NODE_111_length_3588_cov_38.746605",
+              "W_V_NODE_158_length_2685_cov_0.659891",
+              "W_V_NODE_165_length_2601_cov_1.288601",
+              "W_V_NODE_176_length_2424_cov_5.028298",
+              "W_V_NODE_214_length_2062_cov_16.974418")
+
+
+# Créez un vecteur avec tous les noms de lignes dans le dataframe d'origine
+all_taxa <- rownames(count)
+
+# Trouvez les noms de lignes qui ne sont pas dans bad_taxa
+conserved_name <- setdiff(all_taxa,bad_taxa)
+
+# Sélectionnez les lignes du dataframe d'origine en utilisant les noms à conserver
+abundance_clean <- count[conserved_name,]
+
+contigs_vOTU <- contigs_info[conserved_name,]
+
+#write.table(as.data.frame(contigs_vOTU), file = "/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/METADATA/vOTU_metadata.txt", sep = "\t", row.names = T, quote = F, col.names = NA)
+
+
+```
+
+
+## Abundance table
+
+### Abundance table for all samples
+We created a Phyloseq object that contains the abundance table and metadata of all samples.
+```{r all abundance table, message=FALSE, warning=FALSE}
+
+#Removing control samples from the abundance table
+control <- c("T_V", "W1_V","W2_V","W_V") #List of the sample name of control
+All_sample <- colnames(abundance_clean) #Sample name of abundance table
+conserved_col<- setdiff(All_sample,control) # comparer sample name of control and sample name of abundance table. Keep the difference.
+All_abundance <- abundance_clean[,conserved_col] #extract DNA sample without control from abundance table
+
+# Check consistency
+#all(colnames(All_abundance) %in% rownames(sample_metadata)) ## sample names between metadata and otu table
+#all(rownames(All_abundance) %in% rownames(contigs_info)) ## taxa names between taxonomic and otu tables
+
+# phyloseq object of DNA sample without control sample
+obj_All <- phyloseq(otu_table(All_abundance, taxa_are_rows = TRUE), sample_data(sample_metadata) , tax_table(contigs_info))
+obj_All
+
+#write.table(DNA_abundance, "/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/Phyloseq_analysis/All_abundance_clean.txt", append = FALSE, sep = ";", dec = ",",row.names = TRUE, col.names = TRUE)
+#saveRDS(obj_DNA, file = "/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/Phyloseq_analysis/obj_All.rds")
+```
+
+### Abundance table for cabbage samples
+We created a Phyloseq object that contains the abundance table and metadata of cabbage samples.
+```{r cabbage abundance table, message=FALSE, warning=FALSE}
+# Extract only Cabbage samples
+Cabbage_metadata <- subset(sample_metadata, sample_metadata$Matrix == 'Cabbage')
+Cabbage_sample <- rownames(Cabbage_metadata)
+Cabbage_abundance <- abundance_clean[,Cabbage_sample,drop = FALSE]
+
+#Removing contig not found into DNA samples
+#Calcul the abundance sum of all contigs 
+Cabbage_abundance_colsum <- Cabbage_abundance %>% 
+  mutate(row_sum=rowSums(dplyr::select(.,"SA_0A_V","SA_0B_V","SA_0C_V","SA_2A_V","SA_2B_V","SA_2C_V","SA_7A_V","SA_7B_V","SA_7C_V","SA_14A_V","SA_14B_V","SA_14C_V","SA_21A_V","SA_21B_V","SA_21C_V","SA_28A_V","SA_28B_V","SA_28C_V")))
+
+#selected only contigs with abundance higher than 0, meaning present into at least 1 sample
+Cabbage_abundance_clean <- subset(Cabbage_abundance_colsum, Cabbage_abundance_colsum$row_sum > 0)%>%
+  .[,-19] #delete the sum column for the rest of the analyses
+
+# Check consistency
+#all(colnames(Cabbage_abundance_clean) %in% rownames(sample_metadata)) ## sample names between metadata and otu table
+#all(rownames(Cabbage_abundance_clean) %in% rownames(contigs_info)) ## taxa names between taxonomic and otu tables
+
+# phyloseq object of DNA sample without control sample
+obj_Cabbage <- phyloseq(otu_table(Cabbage_abundance_clean, taxa_are_rows = TRUE), sample_data(sample_metadata) , tax_table(contigs_info))
+obj_Cabbage
+
+#saveRDS(obj_Cabbage, file = "/work_projet/metasimfood/metavirome/Phage_dynamic_fermented_food/results/Phyloseq/obj_cabbage.rds")
+```
+
+### Abundance table for carrot samples
+We created a Phyloseq object that contains the abundance table and metadata of carrot samples.
+```{r Carrot abundance table, message=FALSE, warning=FALSE}
+# Extract only Carrot samples
+Carrot_metadata <- subset(sample_metadata, sample_metadata$Matrix == 'Carrot')
+Carrot_sample <- rownames(Carrot_metadata)
+Carrot_abundance <- abundance_clean[,Carrot_sample,drop = FALSE]
+
+#Removing contig not found into DNA samples
+#Calcul the abundance sum of all contigs 
+Carrot_abundance_colsum <- Carrot_abundance %>% 
+  mutate(row_sum=rowSums(dplyr::select(.,"CA_0A_V","CA_0B_V","CA_0C_V","CA_2A_V","CA_2B_V","CA_2C_V","CA_7A_V","CA_7B_V","CA_7C_V","CA_14A_V","CA_14B_V","CA_14C_V","CA_21A_V","CA_21B_V","CA_21C_V","CA_28A_V","CA_28B_V","CA_28C_V")))
+
+#selected only contigs with abundance higher than 0, meaning present into at least 1 sample
+Carrot_abundance_clean <- subset(Carrot_abundance_colsum, Carrot_abundance_colsum$row_sum > 0)%>%
+  .[,-19] #delete the sum column for the rest of the analyses
+
+# Check consistency
+#all(colnames(Carrot_abundance_clean) %in% rownames(sample_metadata)) ## sample names between metadata and otu table
+#all(rownames(Carrot_abundance_clean) %in% rownames(contigs_info)) ## taxa names between taxonomic and otu tables
+
+# phyloseq object of DNA sample without control sample
+obj_Carrot <- phyloseq(otu_table(Carrot_abundance_clean, taxa_are_rows = TRUE), sample_data(sample_metadata) , tax_table(contigs_info))
+obj_Carrot
+```
+
+## Statistic part
+#### Statistic of vOTU for cabbage  and carrot samples
+```{r statistic on vOTU size for all samples, message=FALSE, warning=FALSE}
+## Contigs length statistics
+# Statistics of the vOTUs length for cabbage samples after control cleaning
+contigs_info_cabbage_sample <- data.frame(tax_table(obj_Cabbage))
+summary(as.numeric(contigs_info_cabbage_sample$Length))
+
+contigs_info_cabbage_sample$Length <- as.numeric(contigs_info_cabbage_sample$Length)
+
+#Selected contigs with a size higher than  100 kb
+contigs_length_stat_cab <- contigs_info_cabbage_sample %>%
+  arrange(-Length) %>%
+  dplyr::filter(Length >= 100000)
+
+# Draw density histogram of the distribution of contig sizes. 
+p_dens_cabbage <- ggplot(contigs_info_cabbage_sample, aes(x=(Length/1000))) +
+  geom_histogram(colour="black", fill="#a6bddb", binwidth = 2) + 
+  theme_bw() +
+  ylab("Number of vOTUs") + 
+  xlab("Size (Kb)") +
+  scale_x_continuous(breaks=seq(0, 2000000, 100)) +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.title.x = element_text(size = 14))
+p_dens_cabbage 
+
+# Statistics of the vOTUs length for carrot samples after control cleaning
+contigs_info_carrot_sample <- data.frame(tax_table(obj_Carrot))
+summary(as.numeric(contigs_info_carrot_sample$Length))
+
+contigs_info_carrot_sample$Length <- as.numeric(contigs_info_carrot_sample$Length)
+
+#Selected contigs with a size higher than  100 kb
+contigs_length_stat_cab <- contigs_info_carrot_sample %>%
+  arrange(-Length) %>%
+  dplyr::filter(Length >= 100000)
+
+# Draw density histogram of the distribution of contig sizes. 
+p_dens_carrot <- ggplot(contigs_info_carrot_sample, aes(x=(Length/1000))) +
+  geom_histogram(colour="black", fill="#a6bddb", binwidth = 2) + 
+  theme_bw() +
+  ylab("Number of vOTUs") + 
+  xlab("Size (Kb)") +
+  scale_x_continuous(breaks=seq(0, 2000000, 100)) +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.title.x = element_text(size = 14))
+p_dens_carrot
+```
+
+## Host found into dataset.
+```{r Analyses of viruses type, message=FALSE, warning=FALSE}
+#Statistic for host for cabbage samples
+cabb_host <- data.frame(table(contigs_info_cabbage_sample$Host_order))
+names(cabb_host) <- c("Host_order", "Freq") # rename column of dataframe
+cabb_host$Condition <- "All" # Add a column with the type subset used.
+
+cabb_host_info <- right_join(cabb_host,contigs_info_cabbage_sample,by="Host_order")%>%
+  .[,c("Host_order","Freq","Host_phylum")]%>%
+  na.omit(cabb_host_info)
+cabb_host_info<- unique(cabb_host_info)
+
+cabb_host_sorted <- cabb_host_info %>%
+  arrange(desc(Freq))
+
+pal_col <- c("Pseudomonadota"="darkseagreen", "Bacillota"= "slategray3","Bacteroidota"= "thistle3", "Actinomycetota"= "lightpink4" ,"Bdellovibrionota"= "deepskyblue4" ,"No prediction"= "antiquewhite2" )
+cabb_host_sorted$Host_phylum <- factor(cabb_host_sorted$Host_phylum, levels = c("Pseudomonadota", "Bacillota", "Bacteroidota", "Actinomycetota", "Bdellovibrionota", "No prediction"))
+
+p_host_cabb <- ggplot(cabb_host_sorted, aes(fill=Host_phylum, y=Freq, x=fct_relevel(Host_order, "Lactobacillales","Enterobacterales", "Pseudomonadales", "Flavobacteriales", "Sphingobacteriales","Bacteroidales","Bacteriovoracales","Burkholderiales","Gammaproteobacteria","Propionibacteriales","Rhizobiales","Rhodobacterales","No prediction")))+ 
+  geom_bar(stat="identity", position="stack") +
+  labs(x="", y="Number of vOTUs") +
+  theme(plot.title = element_text(size = 20),
+        plot.subtitle = element_text(size = 10),
+        plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white"),
+        axis.line = element_line(colour = "black"),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        legend.text = element_text(size = 14, face = "italic"),  # Taille du texte de la légende
+        legend.title = element_text(size = 16),
+        axis.text.x = element_text(size = 16,angle = 45,hjust=1,face = "italic"),
+        axis.ticks = element_line(size = 0))+
+        scale_y_continuous(limits = c(0, 250))+
+  scale_fill_manual(values=c("Pseudomonadota"="darkseagreen", "Bacillota"= "slategray3","Bacteroidota"= "thistle3", "Actinomycetota"= "lightpink4" ,"Bdellovibrionota"= "deepskyblue4" ,"No prediction"= "antiquewhite2" ),
+                    name = "Host phylum")
+ 
+p_host_cabb
+
+#Statistic for host for carrage samples
+carr_host <- data.frame(table(contigs_info_carrot_sample$Host_order))
+names(carr_host) <- c("Host_order", "Freq") # rename column of dataframe
+carr_host$Condition <- "All" # Add a column with the type subset used.
+
+carr_host_info <- right_join(carr_host,contigs_info_carrot_sample,by="Host_order")%>%
+  .[,c("Host_order","Freq","Host_phylum")]%>%
+  na.omit(carr_host_info)
+carr_host_info<- unique(carr_host_info)
+
+carr_host_sorted <- carr_host_info %>%
+  arrange(desc(Freq))
+
+pal_col <- c("Pseudomonadota"="darkseagreen", "Bacillota"= "slategray3","No prediction"= "antiquewhite2" )
+carr_host_sorted$Host_phylum <- factor(carr_host_sorted$Host_phylum, levels = c("Pseudomonadota", "Bacillota", "No prediction"))
+
+p_host_carr <- ggplot(carr_host_sorted, aes(fill=Host_phylum, y=Freq, x=fct_relevel(Host_order, "Enterobacterales", "Lactobacillales", "Acidaminococcales", "No prediction"))) + 
+  geom_bar(stat="identity", position="stack") +
+  labs(x="", y="Number of vOTUs") +
+  theme(plot.title = element_text(size = 20),
+        plot.subtitle = element_text(size = 10),
+        plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white"),
+        axis.line = element_line(colour = "black"),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        legend.text = element_text(size = 14, face = "italic"),  # Taille du texte de la légende
+        legend.title = element_text(size = 16),
+        axis.text.x = element_text(size = 16,angle = 45,hjust=1,face = "italic"),
+        axis.ticks = element_line(size = 0))+
+        scale_y_continuous(limits = c(0, 250))+
+  scale_fill_manual(values=c("Pseudomonadota"="darkseagreen", "Bacillota"= "slategray3","Bacteroidota"= "thistle3", "Actinomycetota"= "lightpink4" ,"Bdellovibrionota"= "deepskyblue4" ,"No prediction"= "antiquewhite2" ),
+                    name = "Host phylum")
+ 
+p_host_carr
+
+```
+
+
+## Beta-diversity
+
+Is there any differences regarding viral composition between samples
+according to the vegetable matrix?
+
+Methods:
+
+-   calculate a distance matrix between samples with bc
+    (presence/absence of contigs corrected by abundance) and jcc methods
+    (presence/absence of contigs only)
+
+-   apply a PERMANOVA test (permutational analysis of variance) to test
+    the effect of the Kinetic factor
+
+-   perform an ordination (PCoA or NMDS) for visualisation purpose. PCoA
+    is a parametric method of ordination and NMDS is non-parametric
+    (turn distances into ranked distance).
+
+#### Normalisation
+
+We transformed abundance data by TPM. We normalized by contig length and
+transformed to proportions
+
+```{r TPM transformation, message=FALSE, warning=FALSE}
+setwd("/work_projet/metasimfood/metavirome/Article_fermented_commercial/")
+
+# Extract abundance table 
+abundance_table <- as.data.frame(otu_table(obj_All)) %>% rownames_to_column(var = "Contig")
+#recovery the abundance table of obj_clean in the form of dataframe. The row name is the contigs identify.
+
+# Add contig length and set the vector of contig length
+abundance_table2 <- left_join(abundance_table, Contig_Length, by = "Contig")
+vect_length <- abundance_table2$Length 
+# join the abundance table and the list of contig length into the data frame abundance_table2 based on the column contig identity.
+# creat the vector vect_length that contain all length of the abundance table.
+  
+# Transform counts to TPM
+## First divide the count matrix by the vector of contig length
+obj_All_TPM <- obj_All
+otu_table(obj_All_TPM) <- otu_table(obj_All_TPM) / vect_length 
+
+## Second transform the count matrix into proportions 
+count_to_prop_sub <- function(x) {return( x / sum(x) )}
+obj_All_TPM <- transform_sample_counts(obj_All_TPM, count_to_prop_sub)
+#sample_sums(obj_All_TPM)
+# creat function count_to_prop that calculate the proportion based of the count of abundance divide by the sum of the abundance.
+# transform_sample_counts: Transform abundance data in an otu_table, sample-by-sample.
+# sample_sums: Returns the total number of individuals observed from each sample.
+
+abun_test<-as.data.frame(otu_table(obj_All_TPM)) %>%
+  rownames_to_column(.,var = "contig")
+
+```
+
+##### Matrix calcul
+
+```{r Matrix calcul, message=FALSE, warning=FALSE}
+dist_bc <- phyloseq::distance(obj_All_TPM, method = "bray") 
+```
+
+##### Permanova test
+
+Is there any differences regarding viral composition between samples
+according to the vegetable matrix?
+
+```{r Permanova test in function of sampling_day, message=FALSE, warning=FALSE}
+# on BC 
+set.seed(030623)
+adonis_bc_sample <- adonis2(formula = dist_bc~sampling_day, data = data.frame(sample_data(obj_All_TPM)))
+adonis_bc_sample
+res.adonis.bc_sample <- paste("Permanova, ", "R2", " = ", round(adonis_bc_sample$R2[1],3), ", p =", adonis_bc_sample$`Pr(>F)`[1],"**") 
+
+```
+```{r Permanova test in function of sampling_day and matrice, message=FALSE, warning=FALSE}
+# on BC 
+set.seed(030623)
+adonis_bc_sample <- adonis2(formula = dist_bc~sampling_day*Matrix, data = data.frame(sample_data(obj_All_TPM)))
+adonis_bc_sample
+res.adonis.bc_sample <- paste("Permanova, ", "R2", " = ", round(adonis_bc_sample$R2[1],3), ", p =", adonis_bc_sample$`Pr(>F)`[1],"**") 
+
+```
+A significant effect of the matrix was observed on the composition of
+the virome both with BC and Jaccard distances (p-value of 0.005, R2
+values of 2.4031 and 1.8732, respectly). The viromes thus varied
+according to the type of vegetables used.
+
+##### Plot construction
+
+```{r Plot construction, message=FALSE, warning=FALSE}
+pal_lib <- c("0"="#3D5941FF","2"="#778868FF","7"="#B5B991FF", "14"="#DE8A5AFF","21"="#BE7245FF","28"="#8C311CFF")
+
+# Si vous voulez ordonner sampling_day selon un ordre spécifique
+obj_All_TPM@sam_data$sampling_day <- factor(obj_All_TPM@sam_data$sampling_day, 
+                                                 levels = c("0", "2", "7","14","21","28"))  # Spécifiez votre ordre ici
+
+#PCoA with BC
+ord_PCoA_bc <- ordinate(obj_All_TPM, method = "PCoA", distance = dist_bc)
+
+p1B <- plot_ordination(obj_All_TPM, ord_PCoA_bc,color = "sampling_day",shape = "Matrix")+
+  labs(title = "BRAY-CURTIS",
+    subtitle = res.adonis.bc_sample)+
+  theme(plot.title = element_text(size = 20),
+        plot.subtitle = element_text(size = 10),
+        plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white"),
+        axis.line = element_line(colour = "black"))+
+  geom_point(size=3)+
+  geom_text_repel(aes(label=Figure_label),size=4,vjust = 1.5)+
+  scale_colour_manual(values = pal_lib)
+p1B
+
+
+```
+
+
+#### Heatmap
+
+In order to visualize the abundance of the different viral contigs in
+the samples, we used a heatmap. An abundance filter was used to keep
+only the most abundant contigs.
+But we need to transform data by logarithm to compare them.
+
+First we calculate the mean of relative abundance of each contigs to calculate the statistique value to select most abundant contigs.
+
+```{r Pheatmap normalized filtred, message=FALSE, warning=FALSE}
+setwd("/work_projet/metasimfood/metavirome/Article_fermented_commercial/")
+#Calculate the mean of relative abundance of each contigs to have the statistic of abundance.
+sum_taxa <- taxa_sums(obj_All_TPM)/36
+summary(sum_taxa)
+
+#transform log function
+log_fun <- function(x){
+  (log((x + 0.000001),10))
+}
+
+#extract abundance table of the 75% of most abundant vOTUs
+vOTUs_prunedSet_All<-  data.frame(otu_table(obj_All_TPM))
+#transform abundance table in log 
+vOTUs_prunedSet_All_norm <- t(apply(vOTUs_prunedSet_All, 1, log_fun))
+
+ordre_colonnes <- c("CA_0A_V","CA_0B_V","CA_0C_V","CA_2A_V","CA_2B_V","CA_2C_V","CA_7A_V","CA_7B_V","CA_7C_V","CA_14A_V","CA_14B_V","CA_14C_V","CA_21A_V","CA_21B_V","CA_21C_V",
+"CA_28A_V","CA_28B_V","CA_28C_V","SA_0A_V","SA_0B_V","SA_0C_V","SA_2A_V","SA_2B_V","SA_2C_V","SA_7A_V","SA_7B_V","SA_7C_V","SA_14A_V","SA_14B_V","SA_14C_V","SA_21A_V","SA_21B_V","SA_21C_V","SA_28A_V","SA_28B_V","SA_28C_V")
+
+vOTUs_prunedSet_All_norm <- vOTUs_prunedSet_All_norm[, ordre_colonnes]
+
+sample_annotation_Med <- data.frame(sample_data(obj_All_TPM))
+custom_colnames <- c("Carrot_0A","Carrot_0B","Carrot_0C","Carrot_2A","Carrot_2B","Carrot_2C","Carrot_7A","Carrot_7B","Carrot_7C","Carrot_14A","Carrot_14B","Carrot_14C","Carrot_21A","Carrot_21B","Carrot_21C","Carrot_28A","Carrot_28B","Carrot_28C",
+"Sauerkraut_0A","Sauerkraut_0B","Sauerkraut_0C","Sauerkraut_2A","Sauerkraut_2B","Sauerkraut_2C","Sauerkraut_7A","Sauerkraut_7B","Sauerkraut_7C","Sauerkraut_14A","Sauerkraut_14B","Sauerkraut_14C","Sauerkraut_21A","Sauerkraut_21B","Sauerkraut_21C",
+"Sauerkraut_28A","Sauerkraut_28B","Sauerkraut_28C")
+
+#pheatmap
+ph4_13 <- pheatmap(vOTUs_prunedSet_All_norm,
+               show_rownames = FALSE,
+               cluster_cols = FALSE,
+               fontsize_col = 7,
+               fontsize = 6,
+               angle_col = 45,
+               labels_col = custom_colnames)
+               
+ph4_13
+
+```
+
+## Cabbage analyses
+#### Normalisation
+We transformed abundance data by TPM. We normalized by contig length and
+transformed to proportions
+
+```{r TPM transformation cabbage, message=FALSE, warning=FALSE}
+# Extract abundance table 
+abundance_table_cabbage <- as.data.frame(otu_table(obj_Cabbage)) %>% rownames_to_column(var = "Contig")
+#recovery the abundance table of obj_clean in the form of dataframe. The row name is the contigs identify.
+
+# Add contig length and set the vector of contig length
+abundance_table_cabbage2 <- left_join(abundance_table_cabbage, Contig_Length, by = "Contig")
+vect_length <- abundance_table_cabbage2$Length 
+# join the abundance table and the list of contig length into the data frame abundance_table2 based on the column contig identity.
+# creat the vector vect_length that contain all length of the abundance table.
+  
+# Transform counts to TPM
+## First divide the count matrix by the vector of contig length
+obj_cabbage_TPM <- obj_Cabbage
+otu_table(obj_cabbage_TPM) <- otu_table(obj_cabbage_TPM) / vect_length 
+
+## Second transform the count matrix into proportions 
+count_to_prop_sub <- function(x) {return( x / sum(x) )}
+obj_cabbage_TPM <- transform_sample_counts(obj_cabbage_TPM, count_to_prop_sub)
+#sample_sums(obj_DNA_TPM)
+# creat function count_to_prop that calculate the proportion based of the count of abundance divide by the sum of the abundance.
+# transform_sample_counts: Transform abundance data in an otu_table, sample-by-sample.
+# sample_sums: Returns the total number of individuals observed from each sample.
+
+obj_cabbage_TPM@sam_data$sampling_day <- factor(obj_cabbage_TPM@sam_data$sampling_day, 
+                                                 levels = c("0", "2", "7","14","21","28"))
+
+abun_cabbage<-as.data.frame(otu_table(obj_cabbage_TPM)) %>%
+  rownames_to_column(.,var = "contig")
+
+saveRDS(obj_cabbage_TPM, file = "/work_projet/metasimfood/metavirome/Phage_dynamic_fermented_food/results/Phyloseq/obj_cabbage_TPM.rds")
+```
+
+#Alpha-diversity cabbage virome
+We measured the Shannon index to evaluate the effect of the kinetic on the overall phage diversity observed in the samples.
+```{r alpha diversity cabbage, message=FALSE, warning=FALSE}
+pal_lib <- c("0"="#3D5941FF","2"="#778868FF","7"="#B5B991FF", "14"="#DE8A5AFF","21"="#BE7245FF","28"="#8C311CFF")
+alpha.diversity <- estimate_richness(obj_cabbage_TPM, measures = "Shannon")
+alpha.diversity
+summary(alpha.diversity)
+
+res.kruskal <- alpha.diversity %>% kruskal_test(Shannon ~ sample_data(obj_cabbage_TPM)$sampling_day)
+res.kruskal
+res.kruskal.short <- paste("Kruskal-Wallis test, Chi2 = ", round(res.kruskal$statistic[1],3), ", p = ", round(res.kruskal$p[1],3))
+
+p1_SI_cab <- plot_richness(obj_cabbage_TPM, color = "sampling_day", measures = "Shannon", x="sampling_day") +
+  # Create a richness plot using the `plot_richness` function
+  # - `obj_cabbage_TPM`: The data object containing the richness or diversity metrics for cabbage samples.
+  # - `color = "sampling_day"`: Points/lines are colored by the 'sampling_day' variable.
+  # - `measures = "Shannon"`: The Shannon index is used to measure alpha diversity.
+  # - `x = "sampling_day"`: Sampling day is plotted on the x-axis.
+  labs(subtitle = res.kruskal.short) +
+  # Adds a subtitle to the plot, containing results from a Kruskal-Wallis test stored in `res.kruskal.short`.
+  #scale_color_manual(values=pal_step) + 
+  # (Commented out) Allows for manual adjustment of the color palette. `pal_step` would contain the color values.
+  theme_bw()+ 
+  # Applies a clean, black-and-white theme to the plot.
+  #theme(strip.background = element_blank(), strip.text = element_blank()) +
+  # Removes the background and text from any strip elements (facet labels).
+  ggtitle("SHANNON INDEX")+
+  # Sets the main title of the plot to "SHANNON INDEX".
+  xlab("Time (day)") +
+  theme(legend.position = "none", 
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 15),
+        axis.title.x = element_text(size = 15),
+        legend.title = element_text(size = 14),
+        axis.text.x = element_text(size = 14,hjust=1),
+        axis.ticks = element_line(size = 0))+
+  scale_colour_manual(values = pal_lib)
+  # Removes the legend from the plot.
+p1_SI_cab <- add_summary(p1_SI_cab, "median_hilow", size = 0.5)
+# Adds summary statistics (median and high/low range) to the plot using `add_summary`.
+# The size of the summary points/lines is set to 0.5.
+
+alpha.diversity$sampling_day <- sample_data(obj_cabbage_TPM)$sampling_day
+
+# Modèle ANOVA
+model <- aov(Shannon ~ sampling_day, data = alpha.diversity)
+
+# Test de Dunnett
+
+dunnett <- glht(model, linfct = mcp(sampling_day = "Dunnett"))
+summary_dunnett <- summary(dunnett)
+
+# Ajouter les annotations significatives
+p1_SI_cab <- p1_SI_cab +
+  geom_text(aes(
+    x = as.numeric(sample_data(obj_cabbage_TPM)$sampling_day),
+    y = max(alpha.diversity$Shannon) + 0.2, # Ajuster selon l'échelle
+    label = signif_levels[sample_data(obj_cabbage_TPM)$sampling_day]
+  ), color = "black", size = 4, inherit.aes = FALSE)
+
+# Extract p-values
+pvalues <- summary_dunnett$test$pvalues
+
+signif_levels <- cut(
+  pvalues,
+  breaks = c(0, 0.001, 0.01, 0.05, 1),
+  labels = c("***", "**", "*", "ns")
+)
+
+names(signif_levels) <- levels(factor(alpha.diversity$sampling_day))[-1] # Exclut le contrôle
+
+# Add significatif indication to graph
+p1_SI_cab_dunn <- p1_SI_cab +
+  geom_text(
+    aes(
+      x = as.numeric(as.factor(alpha.diversity$sampling_day)), # Position x
+      y = max(alpha.diversity$Shannon) + 0.2,                 # Position y ajustée
+      label = signif_levels[sampling_day]
+    ),
+    color = "black",
+    size = 4,
+    inherit.aes = FALSE
+  )
+p1_SI_cab_dunn
+
+
+#file_name <- paste0("/work_projet/metasimfood/metavirome/2024_spontaneous_fermentation/results/graph/",Sys.Date(),"_Shannon_index_cabbage.tiff")
+#ggsave(file_name,plot =p1_SI_cab,device = "tiff",width = 8, height = 6, dpi = 300)
+```
+We observed a high Shannon index of the initial day of fermentation, meaning a high specific diversity specific 
+a small decrease in the Shannon index from second day of fermentation but the effect of the kinetic step was not significant (Kruskal wallis test, p>0.05).
+
+## Sparsity
+We next calculated the sparsity of the abundance table :
+```{r sparsity cabbage, message=FALSE, warning=FALSE}
+sparsity <- 100 * sum(otu_table(obj_cabbage_TPM) == 0) / length(otu_table(obj_cabbage_TPM))
+cat("Sparsity =", sparsity, "%")
+```
+
+## Beta diversity
+
+##### Matrix calcul
+
+```{r Matrix calcul cabbage, message=FALSE, warning=FALSE}
+dist_bc <- phyloseq::distance(obj_cabbage_TPM, method = "bray") 
+```
+
+##### Permanova test
+
+Is there any differences regarding viral composition between samples
+according to the vegetable matrix?
+
+```{r Permanova test in function of sampling_day cabbage, message=FALSE, warning=FALSE}
+# on BC 
+set.seed(030623)
+adonis_bc_sample <- adonis2(formula = dist_bc~sampling_day, data = data.frame(sample_data(obj_cabbage_TPM)))
+adonis_bc_sample
+res.adonis.bc_sample <- paste("Permanova, ", "R2", " = ", round(adonis_bc_sample$R2[1],3), ", p =", adonis_bc_sample$`Pr(>F)`[1],"**") 
+
+```
+
+##### Plot construction
+
+```{r Plot construction cabbage, message=FALSE, warning=FALSE}
+pal_lib <- c("0"="#3D5941FF","2"="#778868FF","7"="#B5B991FF", "14"="#DE8A5AFF","21"="#BE7245FF","28"="#8C311CFF")
+
+# Si vous voulez ordonner sampling_day selon un ordre spécifique
+obj_cabbage_TPM@sam_data$sampling_day <- factor(obj_cabbage_TPM@sam_data$sampling_day, 
+                                                 levels = c("0", "2", "7","14","21","28"))  # Spécifiez votre ordre ici
+
+# Ordination et graphique
+#PCoA with BC
+ord_PCoA_bc <- ordinate(obj_cabbage_TPM, method = "PCoA", distance = dist_bc)
+
+p1B_cab <- plot_ordination(obj_cabbage_TPM, ord_PCoA_bc,color = "sampling_day",shape = "Matrix")+
+  labs(title = "BRAY-CURTIS",
+    subtitle = res.adonis.bc_sample)+
+  theme(plot.title = element_text(size = 20),
+        plot.subtitle = element_text(size = 10),
+        plot.background = element_rect(fill = "white", color ="white"),
+        panel.background = element_rect(fill = "white", color ="white"),
+        axis.line = element_line(colour = "black"))+
+  geom_point(size=3)+
+  geom_text_repel(aes(label=Figure_label),size=4,vjust = 1.5)+
+  scale_colour_manual(values = pal_lib)
+p1B_cab
+
+```
+```{r Pheatmap normalized filtred cabbage, message=FALSE, warning=FALSE}
+#Abundance  >  Med = 2.074e-04 filter, we deleted 50% of contigs
+Ab_maj <- 0.001
+x <- taxa_sums(obj_cabbage_TPM)/18 # Calculate the mean of relative abundance of each contigs
+keepTaxa_maj <- x > Ab_maj
+prunedSet_cabbage_maj <- prune_taxa(keepTaxa_maj, obj_cabbage_TPM)
+#prunedSet_DNA_Med
+
+vOTUs_prunedSet_cabbage_maj <-  data.frame(otu_table(prunedSet_cabbage_maj))
+#transform log 
+vOTUs_prunedSet_cabbage_norm_maj <- t(apply(vOTUs_prunedSet_cabbage_maj, 1, log_fun))
+
+#p6 <- fviz_nbclust(vOTUs_prunedSet_cabbage_norm_maj, kmeans, method = "gap_stat", k.max = 15) + theme_minimal() + ggtitle("gap_stat")
+#p6
+
+vOTUs_annotations_maj <- data.frame(tax_table(prunedSet_cabbage_maj))
+# Extract vOTU metadata
+Lifestyle_group <- vOTUs_annotations_maj["Type_vibrant"]
+virus_group <- vOTUs_annotations_maj["group"]
+Host_genus <-  vOTUs_annotations_maj["Host_genus"]
+
+# Creat dataframe `row_ann` for the row annotation
+row_ann <- data.frame(Lifestyle_group,Host_genus,virus_group)
+#row_ann <- data.frame(Host_genus)
+col_ann <- sample_annotation_Med["sampling_day"]
+
+
+# Replace empty values with NA in data frame `row_ann`
+row_ann$Type_vibrant[is.na(row_ann$'Life style')] <- 'No prediction'
+row_ann$Host_genus[is.na(row_ann$genus)] <- 'No prediction'
+
+# Convert the column into a factor with the appropriate levels
+row_ann$Type_vibrant <- factor(row_ann$Type_vibrant, levels = c("Temperate", "Virulent", "unknown"))
+row_ann$Host_genus <- factor(row_ann$Host_genus, levels = c("Citrobacter","Enterobacter","Erwinia","Escherichia","Ewingella","Klebsiella","Lactiplantibacillus","Lentilac
+tobacillus","Leuconostoc","Levilactobacillus","Pantoea","Pediococcus","Providencia","Pseudomonas","Rahnella","Secundilactobacillus","No prediction"))
+
+names(row_ann)[names(row_ann) == "Type_vibrant"] <- "Life style"
+names(row_ann)[names(row_ann) == "group"] <- "Group"
+names(row_ann)[names(row_ann) == "Host_genus"] <- "Host genus"
+names(col_ann)[names(col_ann) == "sampling_day"] <- "Sampling day"
+
+
+ann_color = list("Life style"=c("Temperate"="grey",
+                          "Virulent"="black",
+                          "No prediction"="white"),
+                 "Sampling day"=c("0"="#1C3333FF" , 
+                            "2"="#226060FF", 
+                            "7"="#639CA4FF",
+                            "14"="#D2AD7CFF",
+                            "21"="#BE7245FF",
+                            "28"="#8C311CFF"),
+                 "Host genus"=c('Citrobacter' = '#b2df8a',
+                                'Enterobacter' = '#33a02c',
+                                'Erwinia' = '#fb9a99',
+                                'Escherichia' = '#e31a1c',
+                                'Ewingella' = '#fdbf6f',
+                                'Klebsiella' = '#ff7f00',
+                                'Lactiplantibacillus' = '#cab2d6',
+                                'Lentilactobacillus' = '#6a3d9a',
+                                'Leuconostoc' = 'royalblue3',
+                                'Levilactobacillus' = '#ffff99',
+                                "Pantoea"= "#b15928",
+                                "Pediococcus"= "darkorchid",
+                                "Providencia"= "#a6cee3",
+                                "Pseudomonas"= "maroon3",
+                                "Rahnella"= "rosybrown",
+                                "Secundilactobacillus"= "rosybrown1",
+                                "No prediction"="white"),
+                 "Group"=c("dsDNAphage"="powderblue",
+                                "Lavidaviridae (virophages)" ="azure2",
+                                "Nucleocytoviricota (giant viruses)" = "lightsteelblue2",
+                                 "RNA virus" = "lightblue4",
+                                "ssDNA viruses"="deepskyblue",
+                             "Unknown"= "cornflowerblue"))
+
+ann_color2 = list("sampling_day"=c("0"="#1C3333FF" , 
+                            "2"="#226060FF", 
+                            "7"="#639CA4FF",
+                            "14"="#D2AD7CFF",
+                            "21"="#BE7245FF",
+                            "28"="#8C311CFF"),
+                 "Host_genus"=c('Citrobacter' = '#b2df8a',
+                                'Enterobacter' = '#33a02c',
+                                'Erwinia' = '#fb9a99',
+                                'Escherichia' = '#e31a1c',
+                                'Ewingella' = '#fdbf6f',
+                                'Klebsiella' = '#ff7f00',
+                                'Lactiplantibacillus' = '#cab2d6',
+                                'Lentilactobacillus' = '#6a3d9a',
+                                'Leuconostoc' = 'royalblue3',
+                                'Levilactobacillus' = '#ffff99',
+                                "Pantoea"= "#b15928",
+                                "Pediococcus"= "darkorchid",
+                                "Providencia"= "#a6cee3",
+                                "Pseudomonas"= "maroon3",
+                                "Rahnella"= "rosybrown",
+                                "Secundilactobacillus"= "rosybrown1",
+                                "No prediction"="white"))
+
+
+ph3_maj <- pheatmap(vOTUs_prunedSet_cabbage_norm_maj,
+               show_rownames = FALSE,
+               cluster_cols = FALSE,
+               cutree_rows=6,
+               annotation_row = row_ann,
+               annotation_col = col_ann,
+               annotation_colors = ann_color,
+               angle_col = 45,
+               fontsize_col = 10,
+               fontsize = 10,
+               labels_col = custom_colnames,
+               border_color = NA,
+               legend_breaks = c(-5, -3, -1, max(vOTUs_prunedSet_cabbage_norm_maj)),
+               legend_labels = c("-5", "-3", "-1", "log10"))
+ph3_maj <- as.ggplot(ph3_maj)+
+  theme(plot.background = element_rect(fill = "white", color = "white"))
+ph3_maj
+
+```
+
+Distribution of the most abundant vOTUs during cabbage fermentation. The colors on the heatmap represent the log-transformed relative abundance and range from blue (low relative abundance) to red (high relative abundance). Host genus, viral group, and lifestyle of the different vOTUs are indicated when available.
+
+## Carrot analyses
+#### Normalisation
+
+We transformed abundance data by TPM. We normalized by contig length and
+transformed to proportions
+
+```{r TPM transformation carrot, message=FALSE, warning=FALSE}
+# Extract abundance table 
+abundance_table_carrot <- as.data.frame(otu_table(obj_Carrot)) %>% rownames_to_column(var = "Contig")
+#recovery the abundance table of obj_clean in the form of dataframe. The row name is the contigs identify.
+
+# Add contig length and set the vector of contig length
+abundance_table_carrot2 <- left_join(abundance_table_carrot, Contig_Length, by = "Contig")
+vect_length <- abundance_table_carrot2$Length 
+# join the abundance table and the list of contig length into the data frame abundance_table2 based on the column contig identity.
+# creat the vector vect_length that contain all length of the abundance table.
+  
+# Transform counts to TPM
+## First divide the count matrix by the vector of contig length
+obj_Carrot_TPM <- obj_Carrot
+otu_table(obj_Carrot_TPM) <- otu_table(obj_Carrot_TPM) / vect_length 
+
+## Second transform the count matrix into proportions 
+count_to_prop_sub <- function(x) {return( x / sum(x) )}
+obj_Carrot_TPM <- transform_sample_counts(obj_Carrot_TPM, count_to_prop_sub)
+#sample_sums(obj_DNA_TPM)
+# creat function count_to_prop that calculate the proportion based of the count of abundance divide by the sum of the abundance.
+# transform_sample_counts: Transform abundance data in an otu_table, sample-by-sample.
+# sample_sums: Returns the total number of individuals observed from each sample.
+
+obj_Carrot_TPM@sam_data$sampling_day <- factor(obj_Carrot_TPM@sam_data$sampling_day, 
+                                                 levels = c("0", "2", "7","14","21","28"))
+
+abun_test<-as.data.frame(otu_table(obj_Carrot_TPM)) %>%
+  rownames_to_column(.,var = "contig")
+#write.table(otu_table(obj_DNA_TPM), "/work_projet/metasimfood/metavirome/Article_fermented_commercial/results/Phyloseq_analysis/obj_DNA_TPM.txt", append = FALSE, sep = ";", dec = ",",row.names = TRUE, col.names = TRUE)
+#write.table(tax_table(obj_DNA_TPM), "/work_projet/metasimfood/metavirome/Article_fermented_commercial/results/Phyloseq_analysis/obj_DNA_TPM_taxa.txt", append = FALSE, sep = ";", dec = ",",row.names = TRUE, col.names = TRUE)
+```
+
+
+#Alpha-diversity virome
+We measured the Shannon index to evaluate the effect of the kinetic on the overall phage diversity observed in the samples.
+```{r alpha diversity carrot, message=FALSE, warning=FALSE}
+pal_lib <- c("0"="#3D5941FF","2"="#778868FF","7"="#B5B991FF", "14"="#DE8A5AFF","21"="#BE7245FF","28"="#8C311CFF")
+
+alpha.diversity<-estimate_richness(obj_Carrot_TPM, measures = "Shannon")
+alpha.diversity
+summary(alpha.diversity)
+res.kruskal <- alpha.diversity %>% kruskal_test(Shannon ~ sample_data(obj_Carrot_TPM)$sampling_day)
+res.kruskal
+res.kruskal.short <- paste("Kruskal-Wallis test, Chi2 = ", round(res.kruskal$statistic[1],3), ", p = ", round(res.kruskal$p[1],3))
+p1_SI_CAR <- plot_richness(obj_Carrot_TPM, color = "sampling_day", measures = "Shannon", x="sampling_day") +
+  # Create a richness plot using the `plot_richness` function
+  # - `obj_Carrot_TPM`: The data object containing the richness or diversity metrics for cabbage samples.
+  # - `color = "sampling_day"`: Points/lines are colored by the 'sampling_day' variable.
+  # - `measures = "Shannon"`: The Shannon index is used to measure alpha diversity.
+  # - `x = "sampling_day"`: Sampling day is plotted on the x-axis.
+
+  labs(subtitle = res.kruskal.short) +
+  # Adds a subtitle to the plot, containing results from a Kruskal-Wallis test stored in `res.kruskal.short`.
+
+  #scale_color_manual(values=pal_step) + 
+  # (Commented out) Allows for manual adjustment of the color palette. `pal_step` would contain the color values.
+
+  theme_bw() + 
+  # Applies a clean, black-and-white theme to the plot.
+
+  #theme(strip.background = element_blank(), strip.text = element_blank()) +
+  # Removes the background and text from any strip elements (facet labels).
+
+  ggtitle("SHANNON INDEX")+
+  # Sets the main title of the plot to "SHANNON INDEX".
+
+  theme(legend.position = "none")+
+  scale_colour_manual(values = pal_lib)+
+  xlab("Time (day)") +
+  theme(legend.position = "none", 
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 15),
+        axis.title.x = element_text(size = 15),
+        legend.title = element_text(size = 14),
+        axis.text.x = element_text(size = 14,hjust=1),
+        axis.ticks = element_line(size = 0))+
+  scale_colour_manual(values = pal_lib)
+
+
+p1_SI_CAR <- add_summary(p1_SI_CAR, "median_hilow", size = 0.5)
+# Adds summary statistics (median and high/low range) to the plot using `add_summary`.
+# The size of the summary points/lines is set to 0.5.
+
+p1_SI_CAR
+
+
+```
+## Sparsity
+We next calculated the sparisity of the abundance table :
+```{r Sparsity carrot, message=FALSE, warning=FALSE}
+sparsity <- 100 * sum(otu_table(obj_Carrot_TPM) == 0) / length(otu_table(obj_Carrot_TPM))
+cat("Sparsity =", sparsity, "%")
+```
+
+## Beta diversity
+
+##### Matrix calcul
+
+```{r Matrix calcul carrot, message=FALSE, warning=FALSE}
+dist_bc <- phyloseq::distance(obj_Carrot_TPM, method = "bray") 
+```
+
+##### Permanova test
+
+Is there any differences regarding viral composition between samples
+according to the vegetable matrix?
+
+```{r Permanova test in function of sampling_day carrot, message=FALSE, warning=FALSE}
+# on BC 
+set.seed(030623)
+adonis_bc_sample <- adonis2(formula = dist_bc~sampling_day, data = data.frame(sample_data(obj_Carrot_TPM)))
+adonis_bc_sample
+res.adonis.bc_sample <- paste("Permanova, ", "R2", " = ", round(adonis_bc_sample$R2[1],3), ", p =", adonis_bc_sample$`Pr(>F)`[1],"") 
+```
+##### Plot construction
+
+```{r Plot construction carrot, message=FALSE, warning=FALSE}
+pal_lib <- c("0"="#3D5941FF","2"="#778868FF","7"="#B5B991FF", "14"="#DE8A5AFF","21"="#BE7245FF","28"="#8C311CFF")
+
+# Si vous voulez ordonner sampling_day selon un ordre spécifique
+obj_Carrot_TPM@sam_data$sampling_day <- factor(obj_Carrot_TPM@sam_data$sampling_day, 
+                                                 levels = c("0", "2", "7","14","21","28"))  # Spécifiez votre ordre ici
+
+# Ordination et graphique
+#PCoA with BC
+ord_PCoA_bc <- ordinate(obj_Carrot_TPM, method = "PCoA", distance = dist_bc)
+
+p1B <- plot_ordination(obj_Carrot_TPM, ord_PCoA_bc,color = "sampling_day")+
+  labs(title = "BRAY-CURTIS",
+    subtitle = res.adonis.bc_sample)+
+  theme(plot.title = element_text(size = 20),
+        plot.subtitle = element_text(size = 10),
+        plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white"),
+        axis.line = element_line(colour = "black"))+
+  geom_point(size=3)+
+  geom_text_repel(aes(label=Figure_label),size=4,vjust = 1.5)+
+  scale_colour_manual(values = pal_lib)
+p1B
+
+```
+
+Structural variations of the bacterial communities of fermented carrot. Principal coordinate analysis (PCoA) was applied to the Bray-Curtis dissimilarity matrix derived from bacterial community profiles. Samples are colored according to the sampling day.
+
+```{r Pheatmap normalized filtred carrot, message=FALSE, warning=FALSE}
+# Abundance table extraction
+otu_table <- as.data.frame(otu_table(obj_Carrot_TPM)) %>%
+  rownames_to_column(var = "Contig")
+
+#Sample metadata extraction
+metadata <- sample_data(obj_Carrot_TPM)
+metadata_df <- data.frame(SampleID = rownames(metadata), metadata, row.names = NULL)
+#dim(metadata_df)  # check the line number
+
+# Merge abundance table and metadata
+otu_long <- otu_table %>%
+  pivot_longer(-Contig, names_to = "SampleID", values_to = "Abundance") %>%
+  left_join(metadata_df, by = "SampleID")
+
+# Set a minimum abundance threshold
+seuil <- 0.0000001  # i.e : Abondance ≥ 10
+
+# Select contig with abundance higher than seuil and found in at the three replicat sample
+otu_filtered <- otu_long %>%
+  group_by(Contig, sampling_day) %>%
+  dplyr::summarize(N_replicats = sum(Abundance >= seuil, na.rm = TRUE), .groups = "drop")%>%
+  filter(N_replicats == 3)  
+
+# Clean table to avoid duplicate contigs
+contigs_selectionnes <- unique(otu_filtered$Contig)
+
+# Filter the initial abundance table
+otu_final_init <- otu_table %>%
+  filter(Contig %in% contigs_selectionnes)
+
+otu_final <- otu_final_init %>%
+  column_to_rownames(.,"Contig")
+
+# Normalize the abundance table
+vOTUs_carrot_select_norm <- t(apply(otu_final, 1, log_fun))
+
+if ("Figure_label" %in% colnames(metadata_df)) {
+  custom_colnames <- metadata_df$Figure_label
+} else {
+  stop(" 'NewNames' column doesn't exist in samples data")
+}
+
+#Extract vOTUs annotation data 
+vOTUs_annotations_carrot <- data.frame(tax_table(obj_Carrot_TPM))%>%
+  rownames_to_column(.,var="Contig")
+
+vOTUs_annotations_carrot_top <- left_join(otu_final_init,vOTUs_annotations_carrot, by="Contig")%>%
+  column_to_rownames(.,"Contig")
+
+# Extract vOTU metadata
+Lifestyle_group <- vOTUs_annotations_carrot_top["Type_vibrant"]
+Host_genus <-  vOTUs_annotations_carrot_top["Host_genus"]
+#virus_group <- vOTUs_annotations_Med["group"]
+
+# Creat dataframe `row_ann` for the row annotation
+row_ann <- data.frame(Lifestyle_group,Host_genus)
+col_ann <- sample_annotation_Med["sampling_day"]
+
+names(row_ann)[names(row_ann) == "Type_vibrant"] <- "Life style"
+names(col_ann)[names(col_ann) == "sampling_day"] <- "Sampling day"
+
+# Replace empty values with NA in data frame `row_ann`
+row_ann$`Life style`[is.na(row_ann$`Life style`)] <- 'No prediction'
+row_ann$Host_genus[is.na(row_ann$Host_genus)] <- 'No prediction'
+
+# Convert the column into a factor with the appropriate levels
+row_ann$`Life style` <- factor(row_ann$`Life style`, levels = c("Temperate", "Virulent"))
+row_ann$Host_genus <- factor(row_ann$Host_genus, levels = c("Lactiplantibacillus","Leuconostoc","No prediction"))
+
+
+ann_color = list("Life style"=c("Temperate"="grey",
+                          "Virulent"="black",
+                          "No prediction"="white"),
+                 "Sampling day"=c("0"="#1C3333FF" ,
+                            "2"="#226060FF",
+                            "7"="#639CA4FF",
+                            "14"="#D2AD7CFF",
+                            "21"="#BE7245FF",
+                            "28"="#8C311CFF"),
+                 "Host_genus"=c('Lactiplantibacillus' = '#cab2d6',
+                                'Leuconostoc' = 'blue4',
+                                "No prediction"="white"))
+
+ph3_Med <- pheatmap(vOTUs_carrot_select_norm,
+               show_rownames = TRUE,
+               cluster_cols = FALSE,
+               cutree_cols = 6,
+               annotation_row = row_ann,
+               annotation_col = col_ann,
+               annotation_colors = ann_color,
+               angle_col = 45,
+               fontsize_col = 12,
+               fontsize = 12,
+               labels_col = custom_colnames,
+               legend_breaks = c(-5, -3, -1, max(vOTUs_carrot_select_norm)),
+               legend_labels = c("-5", "-3", "-1", "log10"))
+ph3_Med <- as.ggplot(ph3_Med)+
+  theme(plot.background = element_rect(fill = "white", color = "white"),
+        plot.margin = margin(10, 60, 10, 10))
+ph3_Med
+```
+
+Temporal variation of the virome during carrot fermentation. For better clarity, only vOTUs consistently detected in all three replicates at least at one time point were represented. The color scale represents the log-transformed relative abundance and ranges from blue (low relative abundance) to red (high relative abundance). Host genus and lifestyle of the different vOTUs are indicated when available.
+
+
+```{r figure article, message=FALSE, warning=FALSE}
+otu_df <- as.data.frame(otu_table(obj_All))
+if (taxa_are_rows(obj_All)) {
+  otu_df <- otu_df %>% rownames_to_column("vOTU")
+} else {
+  otu_df <- otu_df %>% t() %>% as.data.frame() %>% rownames_to_column("vOTU")
+}
+
+sample_df <- as.data.frame(sample_data(obj_All))
+sample_df <- rownames_to_column(sample_df, "SampleID")
+
+
+sample_df <- as.data.frame(sample_data(obj_All), stringsAsFactors = FALSE)
+
+
+sample_df$SampleID <- rownames(sample_df)
+
+presence_df <- otu_df %>%
+  pivot_longer(-vOTU, names_to = "SampleID", values_to = "abundance") %>%
+  left_join(sample_df, by = "SampleID") %>%
+  group_by(vOTU, Matrix) %>%
+  summarise(present = any(abundance > 0), .groups = "drop") %>%
+  tidyr::pivot_wider(names_from = Matrix, values_from = present, values_fill = FALSE)
+
+presence_df <- presence_df %>%
+  mutate(matrix_presence = case_when(
+    Cabbage & Carrot ~ "both",
+    Carrot ~ "carrot",
+    Cabbage ~ "cabbage",
+    TRUE ~ "absent"
+  ))
+
+tax_df <- as.data.frame(tax_table(obj_All)) %>%
+  rownames_to_column("vOTU")
+
+tax_df <- left_join(tax_df, presence_df, by = "vOTU")
+
+tax_table(obj_All) <- as.matrix(tax_df %>% column_to_rownames("vOTU"))
+
+contigs_info_test <- as.data.frame(tax_table(obj_All))
+contigs_info_test$Type_vibrant [is.na(contigs_info_test$Type_vibrant)] <- 'Unknown'
+
+contigs_summary <- contigs_info_test %>%
+  group_by(matrix_presence,Type_vibrant, group,Host_family,) %>%
+  summarise(freq = n(), .groups = "drop")
+
+contigs_set <- ggforce::gather_set_data(contigs_summary,c("matrix_presence","Type_vibrant", "group","Host_family"))
+contigs_set$x <- factor(contigs_set$x,
+                        levels = c("matrix_presence","Type_vibrant","group","Host_family" ))
+
+sum_col <- sum(contigs_summary$freq, na.rm = TRUE)
+
+
+new_names <- c(
+  "matrix_presence" = "Matrix",
+  "Type_vibrant" = "Phage life cycle",
+  "group" = "Type of virus", 
+  "Host_family" = "Host family"
+)
+
+# ✅ Plot avec couleurs selon Type_vibrant
+summmary_virome <- ggplot(contigs_set, aes(x = x, id = id, split = y, value = freq)) +
+  geom_parallel_sets(aes(fill = Type_vibrant), alpha = 0.7, axis.width = 0.15) +
+  geom_parallel_sets_axes(axis.width = 0.15) +
+  geom_parallel_sets_labels(angle = 0, size = 4, face = "bold",colour = "black", nudge_x = 0.1, hjust = 0) +
+  scale_x_discrete(labels = new_names) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2", 
+                    limits = c("Temperate", "Virulent", "Unknown")) +
+  labs(fill = "Phage life cycle")+
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 12, face = "bold"),
+    axis.text.y = element_blank(),
+    axis.title.x = element_blank(),
+    plot.title = element_blank()
+  )
+summmary_virome
+```
+
+Parallel plot of the viral composition of fermented cabbage and carrot. Each vOTU is represented according to the matrix in which it is present, its predicted life cycle (based on Vibrant prediction), virus type (according to VirSorter2 prediction), and host family (based on iPHoP prediction). The mean relative abundance of vOTUs per host family is shown in parentheses.
+
+```{r Analyses of DNA viruses taxonomy, message=FALSE, warning=FALSE}
+# Glomerate OTUs at the genus level (or another taxonomic rank)
+obj_genus <- tax_glom(obj_All, taxrank = "Genus")
+#Normalize abundances within each sample
+obj_genus_rel <- transform_sample_counts(obj_genus, function(x) x / sum(x))
+
+# Convert to a long-format dataframe for ggplot
+df_genus <- psmelt(obj_genus_rel)
+#any(is.na(df_genus$Genus))
+
+# Identify the 10 most abundant taxa (at the "Genus" level)
+top_10_genus_DNA <- df_genus %>%
+  group_by(Genus) %>%
+  summarise(total_abundance = sum(Abundance)) %>%
+  arrange(desc(total_abundance)) %>%
+  slice_head(n = 10) %>%
+  pull(Genus)
+
+# Replace genera not in the top 10 with "Other"
+df_genus$Genus <- ifelse(df_genus$Genus %in% top_10_genus_DNA, df_genus$Genus, "Other")
+
+df_genus$Genus <- factor(df_genus$Genus, levels = c("Brunovirus","Fattrevirus","Lederbergvirus","Prymnesiovirus","Heilongjiangvirus","Sandinevirus","Unaquatrovirus","Seongbukvirus","Sherbrookevirus","Unknown","Other"))
+
+# Sum relative abundances across samples within each Matrix
+# Note: at this stage, values are NOT percentages yet -
+# the sum per Matrix equals the number of samples in that Matrix, not 1 or 100
+df_genus_matrix <- df_genus %>%
+  group_by(Matrix, Genus) %>%
+  summarise(Abundance = sum(Abundance), .groups = "drop")
+
+# Rescale so abundances sum to 100% within each Matrix
+# This effectively computes the mean per-sample relative abundance (in %) for each genus,
+# giving equal weight to each sample regardless of its sequencing depth
+df_genus_matrix <- df_genus_matrix %>%
+  group_by(Matrix) %>%
+  mutate(Abundance = Abundance / sum(Abundance) * 100)
+
+
+df_genus_matrix$Genus <- factor(
+  df_genus_matrix$Genus,
+  levels = c("Brunovirus","Fattrevirus","Lederbergvirus","Prymnesiovirus",
+             "Heilongjiangvirus","Sandinevirus","Unaquatrovirus",
+             "Seongbukvirus","Sherbrookevirus","Unknown","Other")
+)
+
+p_genus_viral_matrix <- ggplot(
+  df_genus_matrix,
+  aes(x = Matrix, y = Abundance, fill = Genus)
+) +
+  geom_bar(stat = "identity", position = "stack", width = 0.7) +
+  labs(
+    x = "",
+    y = "Relative abundance (%)",
+    fill = "Genus"
+  ) +
+  scale_fill_manual(values = c(
+    "Brunovirus" ="#ffff99",
+    "Fattrevirus"="#6a3d9a",
+    "Lederbergvirus" ="#cab2d6",
+    "Prymnesiovirus"="#ff7f00",
+    "Heilongjiangvirus"="#fdbf6f",
+    "Sandinevirus"="#e31a1c",
+    "Unaquatrovirus"="#b2df8a",
+    "Seongbukvirus"="#1f78b4",
+    "Sherbrookevirus"="orange1",
+    "Unknown"= "#a6cee3",
+    "Other"="#d9d9d9"
+  )) +
+  theme(
+    legend.text = element_text(size = 12, face = "italic"),
+    legend.title = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    panel.background = element_rect(fill = "white"),
+    axis.ticks = element_blank(),
+    strip.text = element_text(size = 14))
+
+p_genus_viral_matrix
+
+
+```
+Barplot of  viral communities of lab fermented cabbage and carrot. Relative abundance of reads per matrix (%) at the genus level.

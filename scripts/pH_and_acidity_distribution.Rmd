@@ -1,0 +1,318 @@
+---
+title: "pH & Acidity distribution"
+author: "Julia Gendre"
+date: "2023-11-09"
+output: html_document
+header-includes:
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+---
+
+### Packages loading
+
+```{r directory, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.show = "asis",message = FALSE,warning = FALSE, tidy = FALSE )
+knitr::opts_knit$set(root.dir = "/work_projet/metasimfood/metavirome/Phage_dynamic_fermented_food/")
+```
+
+```{r packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(cowplot)
+library(ggpubr)
+sessionInfo()
+```
+
+### Data import
+
+```{r Import data, message=FALSE, warning=FALSE}
+Fermentation_metadata <- read.table("/work_projet/metasimfood/metavirome/Phage_dynamic_fermented_food/Results_table.csv", sep = ',',dec= ".",header = TRUE)
+Fermentation_metadata$Day_sampling [Fermentation_metadata$Day_sampling=="22"]<- "21"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T0"]<- "Day 0"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T2"]<- "Day 2"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T7"]<- "Day 7"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T14"]<- "Day 14"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T21"]<- "Day 21"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T22"]<- "Day 21"
+Fermentation_metadata$Day_sampling_text [Fermentation_metadata$Day_sampling_text=="T28"]<- "Day 28"
+
+
+
+
+Fermentation_metadata$Day_sampling <- as.numeric(Fermentation_metadata$Day_sampling)
+
+Fermentation_metadata$Day_sampling_text <- factor(Fermentation_metadata$Day_sampling_text, levels = c("Day 0", "Day 2", "Day 7","Day 14","Day 21","Day 28"))
+```
+
+## Dynamic of pH during vegetables' fermentation
+
+#### Calculation of mean pH and standard deviation of each sampling day
+
+```{r}
+mean_pH_df <- Fermentation_metadata %>%
+  group_by(Matrix, Day_sampling_text) %>%
+  summarise(
+    mean_pH = mean(pH, na.rm = TRUE),   
+    sd_pH = sd(pH, na.rm = TRUE),       
+    .groups = 'drop'
+  )
+mean_pH_df
+```
+
+#### Representation of the pH curve during vegetables' fermentation
+
+```{r pH distribution, message=FALSE, warning=FALSE}
+color_matrix <- c('Cabbage'='darkolivegreen4','Carrot'='darkorange')
+
+Fermentation_metadata$Matrix <- factor(Fermentation_metadata$Matrix)
+
+print(levels(Fermentation_metadata$Matrix))
+
+
+pH_graph <- ggplot(Fermentation_metadata, aes(x = Day_sampling, y = pH, colour = Matrix)) +
+  geom_point() +
+  geom_smooth(method = "loess", level = 0.95) +
+  scale_x_continuous(breaks = unique(Fermentation_metadata$Day_sampling)) +
+  labs(x = "Time (day)",
+       y = "pH",
+       colour = "Matrix") +
+  scale_colour_manual(values = c("Cabbage" = "darkolivegreen4", "Carrot" = "darkorange")) + 
+  theme_minimal()+
+  theme(axis.title = element_text(size=12),
+        axis.text = element_text(size=11),
+        legend.text = element_text(size=13),
+        legend.title = element_text(size=14))
+pH_graph
+
+
+### Statistic
+mean_pH_carrot <- Fermentation_metadata %>%
+  filter(Matrix == "carrot") %>%    
+  group_by(Day_sampling) %>%               
+  summarise(mean_pH = mean(pH))
+
+mean_pH_cabbage <- Fermentation_metadata %>%
+  filter(Matrix == "cabbage") %>%    
+  group_by(Day_sampling) %>%               
+  summarise(mean_pH = mean(pH))
+```
+
+## Dynamic of titrable acidity during vegetables' fermentation
+
+#### Calculation of mean titrable acidity and standard deviation of each sampling day
+
+```{r}
+mean_acidity_df <- Fermentation_metadata %>%
+  group_by(Matrix, Day_sampling_text) %>%
+  summarise(
+    mean_acidity = mean(Acidity, na.rm = TRUE),   
+    sd_acidity = sd(Acidity, na.rm = TRUE),       
+    .groups = 'drop'
+  )
+mean_acidity_df
+```
+
+#### Representation of the titrable acidity curve during vegetables' fermentation
+
+```{r acidity distribution, message=FALSE, warning=FALSE}
+Ac_graph <- ggplot(Fermentation_metadata, aes(x = Day_sampling, y = Acidity, colour = Matrix)) +
+  geom_point() +
+  geom_smooth(method = "loess", level = 0.95) +
+  scale_x_continuous(breaks=Fermentation_metadata$Day_sampling)+
+  labs(x = "Time (day)",
+       y = "Titratable acidity\n (g lactic acid/100mL)",
+       colour = "Matrix") +
+  scale_colour_manual(values = c("Cabbage" = "darkolivegreen4", "Carrot" = "darkorange")) + 
+  theme_minimal()+
+  theme(axis.title = element_text(size=12),
+        axis.text = element_text(size=11),
+        legend.text = element_text(size=13),
+        legend.title = element_text(size=14))
+Ac_graph
+
+### Statistic
+mean_Ac_carrot <- Fermentation_metadata %>%
+  filter(Matrix == "carrot") %>%    
+  group_by(Day_sampling) %>%               
+  summarise(mean_Ac = mean(Acidity))
+
+mean_Ac_cabbage <- Fermentation_metadata %>%
+  filter(Matrix == "cabbage") %>%    
+  group_by(Day_sampling) %>%              
+  summarise(mean_Ac = mean(Acidity))
+
+```
+
+##### Combining the graphs for the final figure
+
+```{r acidity & pH distribution, message=FALSE, warning=FALSE}
+
+pH_acid_combin <- ggarrange(pH_graph, Ac_graph,labels = c("A", "B"),
+  common.legend = TRUE,
+  legend = "right",
+  label.y = 1.00)+
+  theme(plot.background = element_rect(fill = "white", color = NA),
+           plot.margin = margin(1, 1, 1, 1, "cm"))
+pH_acid_combin
+
+```
+
+## Representation of microbial enumeration during fermentation
+
+```{r Microbial enumeration, message=FALSE, warning=FALSE}
+metadata_log <-  Fermentation_metadata
+metadata_log$MRS_enumeration <- as.numeric(Fermentation_metadata$MRS_enumeration)
+metadata_log$MRS <- log10(metadata_log$MRS_enumeration)
+metadata_log$PCA_enumeration <- as.numeric(Fermentation_metadata$PCA_enumeration)
+metadata_log$PCA <- log10(metadata_log$PCA_enumeration)
+metadata_log$YEGC_enumeration <- as.numeric(Fermentation_metadata$YEGC_enumeration)
+metadata_log$YEGC <- log10(metadata_log$YEGC_enumeration)
+
+metadata_log_cabbage <- subset(metadata_log, subset=metadata_log$Matrix == 'Cabbage')
+metadata_long_cabbage <- pivot_longer(metadata_log_cabbage, 
+                              cols = c(MRS, PCA, YEGC),
+                              names_to = "Enumeration_Type", 
+                              values_to = "Enumeration_Log")
+
+B_cabbage <- ggplot(metadata_long_cabbage, aes(x = Day_sampling, y = Enumeration_Log, shape = Enumeration_Type)) +
+  geom_jitter(aes(fill = "fixed"), width = 0.2, size = 3, color = "black", stroke = 1) +  
+  geom_line(aes(group = interaction(Matrix, Enumeration_Type), color = "fixed"), 
+            stat = "summary", fun = mean) + 
+  geom_errorbar(stat = "summary", fun.data = function(x) {
+    data.frame(ymin = mean(x) - sd(x), ymax = mean(x) + sd(x))
+ }, width = 0.1, aes(color = "fixed")) +  
+  scale_x_continuous(breaks = unique(metadata_long_cabbage$Day_sampling)) +
+  scale_color_manual(values = "darkolivegreen4", guide = "none") +  
+  scale_fill_manual(values = "darkolivegreen4", guide = "none") +  
+  scale_shape_manual(values = c(21, 22, 24)) +  
+  labs(x = "Time (day)", y = "Log (CFU/g)") +
+  theme_minimal() +
+  theme(axis.title = element_text(size=16),
+        axis.text = element_text(size=15),
+        legend.text = element_text(size=16),
+        legend.title = element_blank())
+
+
+metadata_log_carrot <- subset(metadata_log, subset=metadata_log$Matrix == 'Carrot')
+metadata_long_carrot <- pivot_longer(metadata_log_carrot, 
+                              cols = c(MRS, PCA, YEGC),
+                              names_to = "Enumeration_Type", 
+                              values_to = "Enumeration_Log")
+
+
+B_carrot <- ggplot(metadata_long_carrot, aes(x = Day_sampling, y = Enumeration_Log, shape = Enumeration_Type)) +
+  geom_jitter(aes(fill = "fixed"), width = 0.2, size = 3, color = "black", stroke = 1) +   
+  geom_line(aes(group = interaction(Matrix, Enumeration_Type), color = "fixed"), 
+            stat = "summary", fun = mean) + 
+  geom_errorbar(stat = "summary", fun.data = function(x) {
+    data.frame(ymin = mean(x) - sd(x), ymax = mean(x) + sd(x))
+  }, width = 0.1, aes(color = "fixed")) +  
+  scale_x_continuous(breaks = unique(metadata_long_carrot$Day_sampling)) +
+  scale_color_manual(values = "darkorange", guide = "none") +  
+  scale_fill_manual(values = "darkorange", guide = "none") +  
+  scale_shape_manual(values = c(21, 22, 24)) +  
+  labs(x = "Time (day)", y = "Log (CFU/g)") +
+  theme_minimal() +
+  theme(axis.title = element_text(size=16),
+        axis.text = element_text(size=15),
+        legend.text = element_text(size=16),
+        legend.title = element_blank())
+
+Microbio_combin <- ggarrange(B_cabbage, B_carrot, 
+                            labels = c("Cabbage", "Carrot"),
+                            common.legend = TRUE,
+                            legend = "right",
+                            ncol = 2,
+                            label.y = 1) + 
+  theme(plot.background = element_rect(fill = "white", color = NA),
+           plot.margin = margin(1.2, 1.2, 1.2, 1.2, "cm"))
+
+Microbio_combin
+
+```
+
+#### Microbial enumeration statistics
+
+```{r Microbial statistics, message=FALSE, warning=FALSE}
+mean_MRS_df <- metadata_log %>%
+  group_by(Matrix,Day_sampling_text) %>%
+  summarise(
+    mean_acidity = mean(MRS, na.rm = TRUE),   
+    sd_acidity = sd(MRS, na.rm = TRUE),       
+    .groups = 'drop'
+  )
+mean_MRS_df
+
+mean_yeast_df <- metadata_log %>%
+  group_by(Matrix, Day_sampling_text) %>%
+  summarise(
+    mean_acidity = mean(YEGC, na.rm = TRUE),   
+    sd_acidity = sd(YEGC, na.rm = TRUE),       
+    .groups = 'drop'
+  )
+mean_yeast_df
+
+mean_MRS_carrot <- metadata_log_carrot %>%   
+  group_by(Day_sampling) %>%               
+  summarise(mean_MRS = mean(MRS))
+mean_MRS_carrot
+
+mean_MRS_cabbage <- metadata_log_cabbage %>%   
+  group_by(Day_sampling) %>%               
+  summarise(mean_MRS = mean(MRS))
+mean_MRS_carrot
+```
+
+##### Combining the graphs for the final figure
+
+```{r arrangement pH, acidité, microbio, message=FALSE, warning=FALSE}
+
+pH_all <- ggarrange(pH_acid_combin, Microbio_combin, labels = c("", "c"),
+  common.legend = TRUE,
+  nrow = 2,
+  label.x = 0.03)
+pH_all
+
+
+```
+
+Dynamics of key indicators during the fermentation of vegetables. A) pH. B) Titratable acidity expressed in g of lactic acid per 100 mL of exudate. C) Viable counts of total bacteria, LAB and yeasts as determined by plating on PCA, MRS and YEGC media, respectively.
+
+## VLP estimation by Epifluorescence microscopy
+
+```{r}
+mean_VLP_df <- Fermentation_metadata %>%
+  group_by(Matrix, Day_sampling_text) %>%
+  summarise(
+    mean_VLP = mean(VLP_estimation, na.rm = TRUE),   
+    sd_VLP = sd(VLP_estimation, na.rm = TRUE),       
+    .groups = 'drop'
+  )
+mean_VLP_df
+```
+
+#### Representation of the VLP estimation during vegetables' fermentation
+
+```{r VLP distribution, message=FALSE, warning=FALSE}
+color_matrix <- c('Cabbage'='darkolivegreen4','Carrot'='darkorange')
+metadata_log$VLP_estimation <- as.numeric(Fermentation_metadata$VLP_estimation)
+metadata_log$VLP <- log10(metadata_log$VLP_estimation)
+Fermentation_metadata$Matrix <- factor(Fermentation_metadata$Matrix)
+print(levels(Fermentation_metadata$Matrix))
+
+VLP_graph <- ggplot(metadata_log, aes(x = Day_sampling, y = VLP, colour = Matrix)) +
+  geom_point() +
+  geom_smooth(method = "loess", level = 0.95) +
+  scale_x_continuous(breaks = unique(metadata_log$Day_sampling)) +
+  labs(x = "Time (day)",
+       y = "VLP estimation log(VLP/g)",
+       colour = "Matrix") +
+  scale_colour_manual(values = c("Cabbage" = "darkolivegreen4", "Carrot" = "darkorange")) +
+  theme(plot.background = element_rect(fill = "white", color = "white"),
+           plot.margin = margin(1, 1, 1, 1, "cm"))+
+  theme_minimal()
+VLP_graph
+
+```
+
+Estimation of virus-like particle concentration using epifluorescence microscopy. Three fermentation batches were produced for each vegetable and used as biological replicates. Each dot represents the value obtained for one replicate. Samples were collected through the fermentation process on days 0, 2, 7, 14, 21, and 28. Solid lines correspond to the average values, and the gray envelopes indicate the confidence interval at 95%.
